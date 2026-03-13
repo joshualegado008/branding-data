@@ -294,7 +294,7 @@
             <div class="about-row"><span>Built with</span><span>Vue 3 + Vite</span></div>
             <div class="about-row"><span>Database</span><span>Supabase (PostgreSQL)</span></div>
             <div class="about-row"><span>Hosted on</span><span>Netlify</span></div>
-            <div class="about-row"><span>Organization</span><span>Saint Louis University — Branding Office</span></div>
+            <div class="about-row"><span>Organization</span><span>Branding Office</span></div>
           </div>
         </div>
 

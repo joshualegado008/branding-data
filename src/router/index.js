@@ -16,7 +16,9 @@ const EquipmentView  = () => import('@/views/EquipmentView.vue')
 const ReportsView    = () => import('@/views/ReportsView.vue')
 const UsersView      = () => import('@/views/UsersView.vue')
 const SettingsView      = () => import('@/views/SettingsView.vue')
-const QRGeneratorView   = () => import('@/views/QRGeneratorView.vue')
+const QRGeneratorView      = () => import('@/views/QRGeneratorView.vue')
+const ActivityLogView      = () => import('@/views/ActivityLogView.vue')
+const UserManagementView   = () => import('@/views/UserManagementView.vue')
 
 const routes = [
   {
@@ -39,7 +41,9 @@ const routes = [
       { path: 'reports',     name: 'Reports',    component: ReportsView       },
       { path: 'users',       name: 'Users',      component: UsersView         },
       { path: 'settings',    name: 'Settings',   component: SettingsView      },
-      { path: 'qr-generator', name: 'QRGenerator', component: QRGeneratorView },
+      { path: 'qr-generator',   name: 'QRGenerator',      component: QRGeneratorView    },
+      { path: 'activity-log',    name: 'ActivityLog',      component: ActivityLogView     },
+      { path: 'user-management', name: 'UserManagement',   component: UserManagementView  },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },
