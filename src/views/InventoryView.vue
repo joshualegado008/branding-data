@@ -577,6 +577,7 @@ const stockQty      = ref(1)
 const successMsg    = ref('')
 const newForm       = ref({})
 let html5QrScanner  = null
+let scanLock        = false
 
 async function loadHtml5Qr() {
   if (window.Html5Qrcode) return
@@ -690,14 +691,15 @@ async function stopCamera() {
 }
 
 function onScanSuccess(raw) {
+  if (scanLock) return
+  scanLock = true
   stopCamera()
   let parsed = {}
-  // Try JSON (from our QR generator)
   try { parsed = JSON.parse(raw) } catch {
-    // Plain SKU string or barcode
     parsed = { sku: raw.trim() }
   }
   if (!parsed.sku) {
+    scanLock = false
     scanStatus.value = { msg: 'Could not read SKU from QR. Try again.', type: 'error' }
     startCamera()
     return
@@ -766,6 +768,7 @@ async function doAddNewProduct() {
 }
 
 async function resetScanner() {
+  scanLock = false
   await stopCamera()
   scanStep.value   = 'scanning'
   manualSku.value  = ''

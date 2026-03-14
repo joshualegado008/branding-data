@@ -362,7 +362,8 @@ const returnForm = ref({ condition: 'good', notes: '' })
 const formErrors = ref({})
 
 // ── Camera ────────────────────────────────────
-let html5Scanner = null
+let html5Scanner  = null
+let scanLock      = false   // prevents multiple scan triggers on same QR
 
 async function loadHtml5Qr() {
   if (window.Html5Qrcode) return
@@ -403,7 +404,7 @@ async function startCamera() {
     status.value = { msg: '', type: '' }
     await html5Scanner.start(
       { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 200, height: 200 } },
+      { fps: 5, qrbox: { width: 220, height: 220 }, disableFlip: true },
       (decoded) => onScan(decoded),
       () => {}
     )
@@ -428,6 +429,9 @@ async function stopCamera() {
 
 // ── Scan processing ───────────────────────────
 async function onScan(raw) {
+  // Prevent multiple triggers from the same scan
+  if (scanLock) return
+  scanLock = true
   await stopCamera()
   // Try JSON first (from QR generator), then plain serial
   let code = raw.trim()
@@ -436,6 +440,7 @@ async function onScan(raw) {
     code = parsed.serial || parsed.sku || raw.trim()
   } catch {}
   await processCode(code)
+  // Lock is released when user resets / scans again
 }
 
 async function processCode(code) {
@@ -549,9 +554,10 @@ async function submitReturn() {
 
 // ── Reset ─────────────────────────────────────
 async function resetScan() {
+  scanLock = false   // release lock so next scan works
   await stopCamera()
-  step.value     = 'scanning'
-  foundItem.value = null
+  step.value         = 'scanning'
+  foundItem.value    = null
   activeBorrow.value = null
   manualCode.value   = ''
   lastScanned.value  = ''
@@ -559,6 +565,7 @@ async function resetScan() {
   await nextTick()
   waitForElement('equip-qr-reader', 3000).then(found => {
     if (found) startCamera()
+    else status.value = { msg: 'Camera failed to initialize. Use manual entry below.', type: 'warn' }
   })
 }
 
