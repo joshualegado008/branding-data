@@ -76,9 +76,17 @@
           <div class="borrow-form">
             <div class="bf-title">Borrow Details</div>
 
-            <div class="form-field">
-              <label class="form-label">Borrower <span class="req">*</span></label>
-              <input class="form-input form-disabled" :value="profile?.name || profile?.email" disabled />
+            <div class="form-row">
+              <div class="form-field">
+                <label class="form-label">Borrower Name <span class="req">*</span></label>
+                <input class="form-input" v-model="borrowForm.borrowerName" placeholder="Your full name" maxlength="80" />
+                <div class="form-hint">Auto-filled from your account — edit if borrowing on behalf of someone</div>
+                <div class="form-error" v-if="formErrors.borrowerName">{{ formErrors.borrowerName }}</div>
+              </div>
+              <div class="form-field">
+                <label class="form-label">Department / Office</label>
+                <input class="form-input" v-model="borrowForm.department" placeholder="e.g. SLU Branding Office" maxlength="80" />
+              </div>
             </div>
 
             <div class="form-field">
@@ -150,6 +158,10 @@
             <div class="bib-row">
               <span class="bib-key">Borrowed by</span>
               <span class="bib-val"><strong>{{ activeBorrow.borrower_name }}</strong></span>
+            </div>
+            <div class="bib-row" v-if="activeBorrow.borrower_dept">
+              <span class="bib-key">Department</span>
+              <span class="bib-val">{{ activeBorrow.borrower_dept }}</span>
             </div>
             <div class="bib-row">
               <span class="bib-key">Since</span>
@@ -357,7 +369,7 @@ const allVerified = computed(() =>
   (foundItem.value?.description ? verified.value.desc : true)
 )
 
-const borrowForm = ref({ purpose: '', expectedReturn: '', quantity: 1, condition: 'good' })
+const borrowForm = ref({ borrowerName: '', department: '', purpose: '', expectedReturn: '', quantity: 1, condition: 'good' })
 const returnForm = ref({ condition: 'good', notes: '' })
 const formErrors = ref({})
 
@@ -460,9 +472,16 @@ async function processCode(code) {
   status.value = { msg: '', type: '' }
 
   if (item.is_available) {
-    // Ready to borrow
+    // Ready to borrow — pre-fill borrower name from logged-in profile
     step.value = 'borrow'
-    borrowForm.value = { purpose: '', expectedReturn: '', quantity: 1, condition: item.condition || 'good' }
+    borrowForm.value = {
+      borrowerName:   profile.value?.name || profile.value?.email || '',
+      department:     '',
+      purpose:        '',
+      expectedReturn: '',
+      quantity:       1,
+      condition:      item.condition || 'good',
+    }
     formErrors.value = {}
   } else {
     // Currently borrowed — check who has it
@@ -477,8 +496,9 @@ async function processCode(code) {
 // ── Borrow submit ─────────────────────────────
 async function submitBorrow() {
   formErrors.value = {}
-  if (!borrowForm.value.purpose.trim()) { formErrors.value.purpose = 'Purpose is required'; return }
-  if (!borrowForm.value.expectedReturn)  { formErrors.value.expectedReturn = 'Return date is required'; return }
+  if (!borrowForm.value.borrowerName.trim()) { formErrors.value.borrowerName = 'Borrower name is required'; return }
+  if (!borrowForm.value.purpose.trim())      { formErrors.value.purpose = 'Purpose is required'; return }
+  if (!borrowForm.value.expectedReturn)      { formErrors.value.expectedReturn = 'Return date is required'; return }
 
   saving.value = true
   try {
@@ -486,7 +506,8 @@ async function submitBorrow() {
       equipmentId:     foundItem.value.id,
       itemName:        foundItem.value.name,
       borrowerId:      profile.value?.id,
-      borrowerName:    profile.value?.name || profile.value?.email,
+      borrowerName:    borrowForm.value.borrowerName,
+      department:      borrowForm.value.department,
       purpose:         borrowForm.value.purpose,
       expectedReturn:  borrowForm.value.expectedReturn,
       quantity:        borrowForm.value.quantity,
@@ -499,10 +520,12 @@ async function submitBorrow() {
       entityId:   String(foundItem.value.id),
       entityName: foundItem.value.name,
       details: {
-        serial:   foundItem.value.serial_no,
-        purpose:  borrowForm.value.purpose,
-        due:      borrowForm.value.expectedReturn,
-        quantity: borrowForm.value.quantity,
+        serial:     foundItem.value.serial_no,
+        borrower:   borrowForm.value.borrowerName,
+        department: borrowForm.value.department,
+        purpose:    borrowForm.value.purpose,
+        due:        borrowForm.value.expectedReturn,
+        quantity:   borrowForm.value.quantity,
       },
     })
 

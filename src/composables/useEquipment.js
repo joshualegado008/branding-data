@@ -221,7 +221,7 @@ async function getActiveBorrow(equipmentId) {
 
 // ── QR Scan: Borrow via QR ────────────────────
 async function borrowViaQR({ equipmentId, itemName, borrowerId, borrowerName,
-  purpose, expectedReturn, quantity, conditionBefore }) {
+  department, purpose, expectedReturn, quantity, conditionBefore }) {
   // Create borrow record
   const { data, error: err } = await supabase
     .from('equipment_borrows')
@@ -230,6 +230,7 @@ async function borrowViaQR({ equipmentId, itemName, borrowerId, borrowerName,
       item_name:       itemName,
       borrower_id:     borrowerId,
       borrower_name:   borrowerName,
+      borrower_dept:   department || null,
       borrow_date:     new Date().toISOString().split('T')[0],
       expected_return: expectedReturn,
       reason:          purpose,
