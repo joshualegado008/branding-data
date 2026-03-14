@@ -340,7 +340,15 @@ onMounted(async () => {
   })
 })
 
-onUnmounted(() => stopCamera())
+onUnmounted(() => {
+  stopCamera()
+  // Kill ALL camera tracks — ensures no ghost stream persists after page change
+  try {
+    navigator.mediaDevices?.getUserMedia({ video: true }).then(stream => {
+      stream.getTracks().forEach(t => t.stop())
+    }).catch(() => {})
+  } catch {}
+})
 
 // ── Today's records ───────────────────────────
 const todayRecords = computed(() => {
@@ -410,7 +418,14 @@ function waitForElement(id, timeout = 3000) {
 async function startCamera() {
   try {
     if (!window.Html5Qrcode) { status.value = { msg: 'Scanner library not loaded. Use manual entry.', type: 'warn' }; return }
-    if (html5Scanner) { try { await html5Scanner.stop(); html5Scanner.clear() } catch {} html5Scanner = null }
+    if (html5Scanner) {
+      try { await html5Scanner.stop() } catch {}
+      try { html5Scanner.clear() } catch {}
+      html5Scanner = null
+    }
+    // Clear the div completely before re-initializing to prevent ghost elements
+    const el = document.getElementById('equip-qr-reader')
+    if (el) el.innerHTML = ''
     html5Scanner = new window.Html5Qrcode('equip-qr-reader')
     cameraOn.value = true
     status.value = { msg: '', type: '' }
@@ -434,9 +449,16 @@ async function startCamera() {
 async function stopCamera() {
   cameraOn.value = false
   if (html5Scanner) {
-    try { await html5Scanner.stop(); html5Scanner.clear() } catch {}
+    try { await html5Scanner.stop() } catch {}
+    try { html5Scanner.clear() } catch {}
     html5Scanner = null
   }
+  // Kill any orphaned video streams
+  try {
+    document.querySelectorAll('#equip-qr-reader video').forEach(v => {
+      try { v.srcObject?.getTracks()?.forEach(t => t.stop()); v.srcObject = null } catch {}
+    })
+  } catch {}
 }
 
 // ── Scan processing ───────────────────────────

@@ -454,7 +454,10 @@ onMounted(async () => {
   await Promise.all([fetchProducts(), fetchCategories()])
   subscribeRealtime()
 })
-onUnmounted(() => unsubscribeRealtime())
+onUnmounted(() => {
+  unsubscribeRealtime()
+  stopCamera()  // ensure camera is released when leaving the page
+})
 
 // ── Search + Filter ───────────────────────────
 const searchQuery    = ref('')
@@ -653,6 +656,14 @@ async function startCamera() {
       html5QrScanner = null
     }
 
+    // Clear div before init to remove ghost elements from previous session
+    const el = document.getElementById('qr-reader')
+    if (el) el.innerHTML = ''
+    // Kill any existing camera streams from other pages
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      stream.getTracks().forEach(t => t.stop())
+    } catch {}
     html5QrScanner = new window.Html5Qrcode('qr-reader')
     scannerActive.value = true
     scanStatus.value = { msg: '', type: '' }
@@ -688,6 +699,12 @@ async function stopCamera() {
     try { html5QrScanner.clear() } catch {}
     html5QrScanner = null
   }
+  // Kill any orphaned video streams left in the DOM
+  try {
+    document.querySelectorAll('#qr-reader video').forEach(v => {
+      try { v.srcObject?.getTracks()?.forEach(t => t.stop()); v.srcObject = null } catch {}
+    })
+  } catch {}
 }
 
 function onScanSuccess(raw) {
@@ -780,11 +797,14 @@ async function resetScanner() {
 }
 
 async function closeScanner() {
+  scanLock = false
   await stopCamera()
   showScanner.value = false
   scanStep.value    = 'scanning'
   manualSku.value   = ''
   scanStatus.value  = { msg: '', type: '' }
+  scannedData.value  = {}
+  scannedProduct.value = null
 }
 
 const toast = ref({ show: false, message: '', type: 'success' })
