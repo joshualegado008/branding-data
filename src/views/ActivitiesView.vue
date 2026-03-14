@@ -161,7 +161,7 @@
 
     <!-- Empty state -->
     <div class="empty-state" v-else>
-      <div class="empty-icon">📋</div>
+      <i class="bi bi-calendar3 empty-bi"></i>
       <div class="empty-title">No activities found</div>
       <div class="empty-sub">{{ filterStatus === 'all' ? 'Create your first team activity.' : `No ${filterStatus} activities.` }}</div>
       <button class="btn-add" @click="openModal()" v-if="filterStatus === 'all'">
@@ -479,6 +479,7 @@ function doDelete() {
 </script>
 
 <!-- ══ STYLES ══ -->
+
 <style scoped>
 
 .activities-page {

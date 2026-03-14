@@ -94,7 +94,7 @@
 
     <!-- ── Empty ── -->
     <div class="empty-state" v-else-if="filteredAlerts.length === 0">
-      <div class="empty-icon">✅</div>
+      <i class="bi bi-check-circle-fill empty-bi" style="color:#16A34A;"></i>
       <div class="empty-title">All clear!</div>
       <div class="empty-sub">No stock alerts right now. All items are well stocked.</div>
     </div>
@@ -272,6 +272,7 @@ function showToast(message, type = 'success') {
   toastTimer = setTimeout(() => { toast.value.show = false }, 3500)
 }
 </script>
+
 
 <style scoped>
 .alerts-page { display: flex; flex-direction: column; gap: 20px; animation: fadeUp 0.4s both; width: 100%; }

@@ -388,6 +388,7 @@ function buildPDFHtml() {
 }
 </script>
 
+
 <style scoped>
 .reports-page { display: flex; flex-direction: column; gap: 24px; animation: fadeUp 0.4s both; }
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }

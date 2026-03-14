@@ -326,7 +326,8 @@ const pageTitles = {
   '/dashboard/reports':        'Reports',
   '/dashboard/qr-generator':   'QR Code Generator',
   '/dashboard/activity-log':    'Activity Logs',
-  '/dashboard/user-management': 'User Management',
+  '/dashboard/user-management':  'User Management',
+  '/dashboard/equipment-scan':    'Equipment QR Scanner',
   '/dashboard/users':          'User Management',
   '/dashboard/settings':   'Settings',
 }
@@ -438,6 +439,7 @@ async function logout() {
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=Outfit:wght@300;400;500;600&display=swap');
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #app { width: 100%; height: 100%; font-family: 'Outfit', sans-serif; background: #F7F3F4; overflow: hidden; }
 .mobile-backdrop { position: fixed; inset: 0; z-index: 998; background: rgba(26,16,22,0.55); backdrop-filter: blur(2px); }
@@ -520,6 +522,11 @@ html, body, #app { width: 100%; height: 100%; font-family: 'Outfit', sans-serif;
 .dropdown-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
 .dropdown-enter-from { opacity: 0; transform: translateY(-6px) scale(0.97); }
 .dropdown-leave-to   { opacity: 0; transform: translateY(-4px) scale(0.98); }
+
+/* ── Bootstrap Icons global helpers ── */
+.empty-bi   { font-size: 42px; color: #DDD5D7; display: block; text-align: center; }
+.success-bi { font-size: 48px; color: #16A34A; display: block; text-align: center; }
+.bi { line-height: 1; }
 </style>
 
 <style scoped>
@@ -578,7 +585,7 @@ html, body, #app { width: 100%; height: 100%; font-family: 'Outfit', sans-serif;
 .topbar-avatar { width: 36px; height: 36px; background: #B01020; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: white; cursor: pointer; border: 2px solid rgba(176,16,32,0.2); transition: all 0.18s; user-select: none; }
 .topbar-avatar:hover, .topbar-avatar.avatar-active { box-shadow: 0 0 0 3px rgba(176,16,32,0.2); transform: scale(1.05); }
 
-.page-content { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 28px; min-width: 0; box-sizing: border-box; }
+.page-content { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 28px; min-width: 0; box-sizing: border-box; background: #F7F3F4; }
 .page-content::-webkit-scrollbar { width: 5px; }
 .page-content::-webkit-scrollbar-track { background: transparent; }
 .page-content::-webkit-scrollbar-thumb { background: #E0CBCE; border-radius: 3px; }

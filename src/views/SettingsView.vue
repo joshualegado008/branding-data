@@ -294,7 +294,7 @@
             <div class="about-row"><span>Built with</span><span>Vue 3 + Vite</span></div>
             <div class="about-row"><span>Database</span><span>Supabase (PostgreSQL)</span></div>
             <div class="about-row"><span>Hosted on</span><span>Netlify</span></div>
-            <div class="about-row"><span>Organization</span><span>Branding Office</span></div>
+            <div class="about-row"><span>Organization</span><span>Saint Louis University — Branding Office</span></div>
           </div>
         </div>
 
@@ -454,6 +454,7 @@ function showToast(msg, type = 'success') {
   toastTimer = setTimeout(() => { toast.value.show = false }, 3000)
 }
 </script>
+
 
 <style scoped>
 .settings-page { display: flex; flex-direction: column; gap: 20px; animation: fadeUp 0.4s both; width: 100%; }

@@ -320,6 +320,7 @@ async function load() { await fetchLogs({ limit: 500 }) }
 onMounted(load)
 </script>
 
+
 <style scoped>
 .log-page { display: flex; flex-direction: column; gap: 20px; animation: fadeUp 0.4s both; }
 
@@ -334,7 +335,7 @@ onMounted(load)
 /* Summary */
 .summary-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .sum-card { background: white; border: 1.5px solid #EDE3E5; border-radius: 14px; padding: 16px; display: flex; align-items: center; gap: 14px; }
-.sum-icon { width: 40px; height: 40px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 12%, white); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent); }
+.sum-icon { width: 40px; height: 40px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 12%, white); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #B01020; }
 .sum-val   { font-size: 24px; font-weight: 700; color: #1A1016; font-family: 'Cormorant Garamond', serif; line-height: 1; }
 .sum-label { font-size: 11px; color: #9A8589; margin-top: 3px; }
 

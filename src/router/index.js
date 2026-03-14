@@ -19,6 +19,7 @@ const SettingsView      = () => import('@/views/SettingsView.vue')
 const QRGeneratorView      = () => import('@/views/QRGeneratorView.vue')
 const ActivityLogView      = () => import('@/views/ActivityLogView.vue')
 const UserManagementView   = () => import('@/views/UserManagementView.vue')
+const EquipmentScanView    = () => import('@/views/EquipmentScanView.vue')
 
 const routes = [
   {
@@ -41,9 +42,10 @@ const routes = [
       { path: 'reports',     name: 'Reports',    component: ReportsView       },
       { path: 'users',       name: 'Users',      component: UsersView         },
       { path: 'settings',    name: 'Settings',   component: SettingsView      },
-      { path: 'qr-generator',   name: 'QRGenerator',      component: QRGeneratorView    },
-      { path: 'activity-log',    name: 'ActivityLog',      component: ActivityLogView     },
-      { path: 'user-management', name: 'UserManagement',   component: UserManagementView  },
+      { path: 'qr-generator',   name: 'QRGenerator',    component: QRGeneratorView,   meta: { adminOnly: true } },
+      { path: 'activity-log',    name: 'ActivityLog',    component: ActivityLogView,    meta: { adminOnly: true } },
+      { path: 'user-management',  name: 'UserManagement',  component: UserManagementView,  meta: { adminOnly: true } },
+      { path: 'equipment-scan',    name: 'EquipmentScan',   component: EquipmentScanView },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },
@@ -63,6 +65,13 @@ router.beforeEach(async (to) => {
   }
   if (to.meta.guest && session) {
     return { name: 'Overview' }
+  }
+  // Block non-admins from admin-only routes
+  if (to.meta.adminOnly && session) {
+    const { data } = await import('@/lib/supabase').then(m => m.supabase.from('profiles').select('role').eq('id', session.user.id).single())
+    if (data?.role !== 'Administrator') {
+      return { name: 'Overview' }
+    }
   }
 })
 

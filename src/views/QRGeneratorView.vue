@@ -24,47 +24,124 @@
           {{ editing ? 'Edit QR Code' : 'New QR Code' }}
         </div>
 
-        <!-- Pick from inventory -->
-        <div class="import-row">
-          <span class="import-label">Fill from inventory</span>
-          <div class="toggle-wrap" :class="{ on: useInventoryPick }" @click="useInventoryPick = !useInventoryPick"></div>
+        <!-- ── Type switcher ── -->
+        <div class="type-switcher">
+          <button class="type-btn" :class="{ active: qrType === 'product' }" @click="setType('product')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+            Product QR
+          </button>
+          <button class="type-btn" :class="{ active: qrType === 'equipment' }" @click="setType('equipment')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Equipment QR
+          </button>
         </div>
-        <div class="inventory-picker" v-if="useInventoryPick">
-          <label class="form-label">Select Product</label>
-          <select class="form-input form-select" v-model="pickedProduct" @change="fillFromProduct">
-            <option value="">— Choose a product —</option>
-            <option v-for="p in products" :key="p.id" :value="p">{{ p.name }} ({{ p.sku }})</option>
-          </select>
-        </div>
-        <div class="form-divider" v-if="useInventoryPick"></div>
 
-        <div class="form-field">
-          <label class="form-label">Product Name <span class="req">*</span></label>
-          <input class="form-input" v-model="form.name" placeholder="e.g. SLU Red T-Shirt" maxlength="60" />
-        </div>
-        <div class="form-row">
-          <div class="form-field">
-            <label class="form-label">SKU <span class="req">*</span></label>
-            <input class="form-input" v-model="form.sku" placeholder="e.g. SLU-001" maxlength="30" :class="{ 'input-warn': skuExists && !editing }" />
-            <div class="form-hint warn" v-if="skuExists && !editing">⚠ This SKU already exists — saving will update it</div>
+        <!-- ══ PRODUCT fields ══ -->
+        <template v-if="qrType === 'product'">
+          <div class="import-row">
+            <span class="import-label">Fill from inventory</span>
+            <div class="toggle-wrap" :class="{ on: useInventoryPick }" @click="useInventoryPick = !useInventoryPick"></div>
           </div>
-          <div class="form-field">
-            <label class="form-label">Category</label>
-            <input class="form-input" v-model="form.category" placeholder="e.g. Apparel" maxlength="30" />
-          </div>
-        </div>
-        <div class="form-field">
-          <label class="form-label">Supplier</label>
-          <input class="form-input" v-model="form.supplier" placeholder="e.g. Printworks PH" maxlength="60" />
-        </div>
-        <div class="form-row">
-          <div class="form-field">
-            <label class="form-label">Unit</label>
-            <select class="form-input form-select" v-model="form.unit">
-              <option>pcs</option><option>sets</option><option>boxes</option>
-              <option>rolls</option><option>sheets</option><option>meters</option>
-              <option>liters</option><option>kg</option>
+          <div class="inventory-picker" v-if="useInventoryPick">
+            <label class="form-label">Select Product</label>
+            <select class="form-input form-select" v-model="pickedProduct" @change="fillFromProduct">
+              <option value="">— Choose a product —</option>
+              <option v-for="p in products" :key="p.id" :value="p">{{ p.name }} ({{ p.sku }})</option>
             </select>
+          </div>
+          <div class="form-divider" v-if="useInventoryPick"></div>
+
+          <div class="form-field">
+            <label class="form-label">Product Name <span class="req">*</span></label>
+            <input class="form-input" v-model="form.name" placeholder="e.g. SLU Red T-Shirt" maxlength="60" />
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label class="form-label">SKU <span class="req">*</span></label>
+              <input class="form-input" v-model="form.sku" placeholder="e.g. SLU-001" maxlength="30" :class="{ 'input-warn': skuExists && !editing }" />
+              <div class="form-hint warn" v-if="skuExists && !editing"><i class="bi bi-exclamation-triangle-fill" style="margin-right:4px;color:#D97706;"></i>This SKU already exists — saving will update it</div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Category</label>
+              <input class="form-input" v-model="form.category" placeholder="e.g. Apparel" maxlength="30" />
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Supplier</label>
+            <input class="form-input" v-model="form.supplier" placeholder="e.g. Printworks PH" maxlength="60" />
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label class="form-label">Unit</label>
+              <select class="form-input form-select" v-model="form.unit">
+                <option>pcs</option><option>sets</option><option>boxes</option>
+                <option>rolls</option><option>sheets</option><option>meters</option>
+                <option>liters</option><option>kg</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label class="form-label">QR Size</label>
+              <select class="form-input form-select" v-model.number="form.label_size">
+                <option :value="100">Small</option>
+                <option :value="150">Medium</option>
+                <option :value="200">Large</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Notes (optional)</label>
+            <input class="form-input" v-model="form.notes" placeholder="Extra info on the label" maxlength="60" />
+          </div>
+        </template>
+
+        <!-- ══ EQUIPMENT fields ══ -->
+        <template v-if="qrType === 'equipment'">
+          <!-- Pick from equipment list -->
+          <div class="import-row">
+            <span class="import-label">Fill from equipment list</span>
+            <div class="toggle-wrap" :class="{ on: useEquipmentPick }" @click="useEquipmentPick = !useEquipmentPick"></div>
+          </div>
+          <div class="inventory-picker" v-if="useEquipmentPick">
+            <label class="form-label">Select Equipment</label>
+            <select class="form-input form-select" v-model="pickedEquipment" @change="fillFromEquipment">
+              <option value="">— Choose equipment —</option>
+              <option v-for="e in equipmentItems" :key="e.id" :value="e">{{ e.name }} — {{ e.serial_no }}</option>
+            </select>
+          </div>
+          <div class="form-divider" v-if="useEquipmentPick"></div>
+
+          <div class="form-field">
+            <label class="form-label">Equipment Name <span class="req">*</span></label>
+            <input class="form-input" v-model="form.name" placeholder="e.g. Canon EOS M50 Camera" maxlength="60" />
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label class="form-label">Serial Number <span class="req">*</span></label>
+              <input class="form-input" v-model="form.sku" placeholder="e.g. CAM-001" maxlength="30" :class="{ 'input-warn': skuExists && !editing }" />
+              <div class="form-hint">This is the unique code embedded in the QR</div>
+              <div class="form-hint warn" v-if="skuExists && !editing"><i class="bi bi-exclamation-triangle-fill" style="margin-right:4px;color:#D97706;"></i>Serial already exists — saving will update it</div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Category</label>
+              <select class="form-input form-select" v-model="form.category">
+                <option value="">— Select —</option>
+                <option v-for="c in equipmentCategories" :key="c">{{ c }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label class="form-label">Location</label>
+              <input class="form-input" v-model="form.supplier" placeholder="e.g. Office Cabinet A" maxlength="60" />
+            </div>
+            <div class="form-field">
+              <label class="form-label">Department</label>
+              <input class="form-input" v-model="form.unit" placeholder="e.g. SLU Branding" maxlength="40" />
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Description / Condition Notes</label>
+            <input class="form-input" v-model="form.notes" placeholder="e.g. Mirrorless camera — handle with care" maxlength="100" />
           </div>
           <div class="form-field">
             <label class="form-label">QR Size</label>
@@ -74,11 +151,20 @@
               <option :value="200">Large</option>
             </select>
           </div>
-        </div>
-        <div class="form-field">
-          <label class="form-label">Notes (optional)</label>
-          <input class="form-input" v-model="form.notes" placeholder="Extra info on the label" maxlength="60" />
-        </div>
+
+          <!-- Update equipment DB toggle -->
+          <div class="import-row update-row">
+            <div>
+              <span class="import-label">Update equipment database</span>
+              <div class="form-hint" style="margin-top:2px;">Also save QR code / serial back to equipment_items table</div>
+            </div>
+            <div class="toggle-wrap" :class="{ on: updateEquipmentDB }" @click="updateEquipmentDB = !updateEquipmentDB"></div>
+          </div>
+          <div class="eq-db-notice" v-if="updateEquipmentDB">
+            <i class="bi bi-info-circle"></i>
+            When you save, the <strong>qr_code</strong> field of this equipment item will also be updated in Supabase so scanning works immediately.
+          </div>
+        </template>
         <div class="form-field">
           <label class="form-label">Label Style</label>
           <div class="style-picker">
@@ -95,8 +181,10 @@
             <canvas ref="previewCanvas" class="preview-qr-canvas"></canvas>
             <div class="plb-info">
               <div class="plb-name">{{ form.name || '—' }}</div>
-              <div class="plb-sku">{{ form.sku }}</div>
-              <div class="plb-supplier" v-if="form.supplier">{{ form.supplier }}</div>
+              <div class="plb-sku">{{ qrType === 'equipment' ? 'Serial: ' : 'SKU: ' }}{{ form.sku }}</div>
+              <div class="plb-supplier" v-if="form.supplier">
+                <i class="bi bi-geo-alt-fill" v-if="qrType === 'equipment'" style="font-size:10px;margin-right:3px;"></i>{{ form.supplier }}
+              </div>
               <div class="plb-meta" v-if="form.category">{{ form.category }}<span v-if="form.unit"> · {{ form.unit }}</span></div>
               <div class="plb-notes" v-if="form.notes">{{ form.notes }}</div>
               <div class="plb-brand">SLU Branding</div>
@@ -245,11 +333,14 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useInventory } from '@/composables/useInventory'
 import { useQRCodes }   from '@/composables/useQRCodes'
+import { useEquipment, EQUIPMENT_CATEGORIES as equipmentCategories } from '@/composables/useEquipment'
+import { supabase }     from '@/lib/supabase'
 
 const { products, fetchProducts } = useInventory()
 const { qrCodes, loading, fetchQRCodes, saveQRCode, deleteQRCode, updateCopies, incrementPrintCount } = useQRCodes()
+const { items: equipmentItems, fetchItems } = useEquipment()
 
-onMounted(() => { fetchProducts(); fetchQRCodes(); loadQRious() })
+onMounted(() => { fetchProducts(); fetchQRCodes(); fetchItems(); loadQRious() })
 
 // ── QRious ────────────────────────────────────
 function loadQRious() {
@@ -263,15 +354,26 @@ function loadQRious() {
 }
 
 // ── Form ──────────────────────────────────────
-const emptyForm = () => ({ name: '', sku: '', category: '', supplier: '', unit: 'pcs', notes: '', label_style: 'classic', label_size: 150 })
+const qrType           = ref('product')   // 'product' | 'equipment'
+const updateEquipmentDB = ref(true)        // also save back to equipment_items
+const pickedEquipment  = ref('')
+const useEquipmentPick = ref(false)
+const selectedEquipmentId = ref(null)     // id of equipment_items row being edited
+
+const emptyForm = () => ({ name: '', sku: '', category: '', supplier: '', unit: '', notes: '', label_style: 'classic', label_size: 150 })
 const form          = ref(emptyForm())
-const editing       = ref(null)   // qr_codes.id being edited
+const editing       = ref(null)
 const saving        = ref(false)
 const labelStyles   = [{ key: 'classic', label: 'Classic' }, { key: 'dark', label: 'Dark' }, { key: 'minimal', label: 'Minimal' }]
 const useInventoryPick = ref(false)
 const pickedProduct    = ref('')
 
-// Check if SKU already exists in library
+function setType(type) {
+  qrType.value = type
+  resetForm()
+}
+
+// Check if SKU/serial already exists in library
 const skuExists = computed(() =>
   !!form.value.sku && qrCodes.value.some(q => q.sku.toLowerCase() === form.value.sku.toLowerCase() && q.id !== editing.value)
 )
@@ -282,11 +384,38 @@ function fillFromProduct() {
   form.value = { ...emptyForm(), name: p.name || '', sku: p.sku || '', category: p.category || '', unit: p.unit || 'pcs' }
 }
 
+function fillFromEquipment() {
+  if (!pickedEquipment.value) return
+  const e = pickedEquipment.value
+  selectedEquipmentId.value = e.id
+  form.value = {
+    ...emptyForm(),
+    name:     e.name        || '',
+    sku:      e.serial_no   || e.qr_code || '',
+    category: e.category    || '',
+    supplier: e.location    || '',
+    unit:     e.department  || '',
+    notes:    e.description || e.condition_notes || '',
+  }
+}
+
 function editQR(qr) {
   editing.value = qr.id
+  // Detect if it was an equipment QR by checking equipment_items
+  const matchedEquip = equipmentItems.value.find(e =>
+    e.serial_no === qr.sku || e.qr_code === qr.sku
+  )
+  if (matchedEquip) {
+    qrType.value = 'equipment'
+    selectedEquipmentId.value = matchedEquip.id
+    pickedEquipment.value = matchedEquip
+    useEquipmentPick.value = false
+  } else {
+    qrType.value = 'product'
+  }
   form.value = {
     name: qr.name, sku: qr.sku, category: qr.category || '',
-    supplier: qr.supplier || '', unit: qr.unit || 'pcs',
+    supplier: qr.supplier || '', unit: qr.unit || '',
     notes: qr.notes || '', label_style: qr.label_style || 'classic',
     label_size: qr.label_size || 150,
   }
@@ -296,8 +425,11 @@ function editQR(qr) {
 function resetForm() {
   form.value    = emptyForm()
   editing.value = null
-  pickedProduct.value   = ''
+  pickedProduct.value    = ''
+  pickedEquipment.value  = ''
   useInventoryPick.value = false
+  useEquipmentPick.value = false
+  selectedEquipmentId.value = null
 }
 
 // ── Save to Supabase ──────────────────────────
@@ -305,7 +437,44 @@ async function saveQR() {
   if (!form.value.name || !form.value.sku) return
   saving.value = true
   try {
+    // 1. Save to qr_codes table
     await saveQRCode({ ...form.value, id: editing.value || undefined })
+
+    // 2. If equipment QR + update DB toggle is on → update equipment_items too
+    if (qrType.value === 'equipment' && updateEquipmentDB.value) {
+      // Find equipment item by old serial or selected id
+      const equipId = selectedEquipmentId.value ||
+        equipmentItems.value.find(e => e.serial_no === form.value.sku || e.qr_code === form.value.sku)?.id
+
+      if (equipId) {
+        const { error } = await supabase
+          .from('equipment_items')
+          .update({
+            qr_code:         form.value.sku,
+            serial_no:       form.value.sku,
+            name:            form.value.name,
+            category:        form.value.category  || null,
+            location:        form.value.supplier  || null,
+            department:      form.value.unit       || null,
+            description:     form.value.notes     || null,
+            condition_notes: form.value.notes     || null,
+          })
+          .eq('id', equipId)
+
+        if (error) {
+          showToast('QR saved but equipment DB update failed: ' + error.message, 'error')
+        } else {
+          // Refresh local equipment list
+          await fetchItems()
+          showToast(`"${form.value.name}" saved & equipment database updated ✓`, 'success')
+          resetForm()
+          return
+        }
+      } else {
+        showToast('QR saved — equipment item not matched in DB (check serial number)', 'success')
+      }
+    }
+
     showToast(editing.value ? `"${form.value.name}" updated` : `"${form.value.name}" saved to QR library`, 'success')
     resetForm()
   } catch (err) {
@@ -368,6 +537,11 @@ function toggleSelectAll() {
 
 // ── QR drawing ────────────────────────────────
 function buildPayload(qr) {
+  // Equipment QR encodes serial field so scanner can look it up
+  const isEquip = equipmentItems.value.some(e => e.serial_no === qr.sku || e.qr_code === qr.sku)
+  if (isEquip) {
+    return JSON.stringify({ serial: qr.sku, name: qr.name, category: qr.category || '', type: 'equipment' })
+  }
   return JSON.stringify({ sku: qr.sku, name: qr.name, category: qr.category || '', supplier: qr.supplier || '', unit: qr.unit || 'pcs' })
 }
 
@@ -507,6 +681,7 @@ function showToast(msg, type = 'success') {
 }
 </script>
 
+
 <style scoped>
 .qr-page { display: flex; flex-direction: column; gap: 20px; animation: fadeUp 0.4s both; width: 100%; }
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -524,6 +699,16 @@ function showToast(msg, type = 'success') {
 .form-card { background: white; border: 1.5px solid #EDE3E5; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 13px; }
 .form-card-title { display: flex; align-items: center; gap: 8px; font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 600; color: #1A1016; }
 .form-divider { height: 1px; background: #F0E5E7; }
+/* Type switcher */
+.type-switcher { display: flex; gap: 6px; background: #F7F3F4; border-radius: 12px; padding: 4px; }
+.type-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 10px; border: none; border-radius: 9px; background: transparent; font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 600; color: #9A8589; cursor: pointer; transition: all 0.2s; }
+.type-btn:hover { color: #3D2830; }
+.type-btn.active { background: white; color: #B01020; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+
+/* Update DB row */
+.update-row { align-items: flex-start !important; }
+.eq-db-notice { background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 10px; padding: 10px 13px; font-size: 12px; color: #2563EB; display: flex; align-items: flex-start; gap: 7px; line-height: 1.5; }
+
 .import-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; background: #F7F3F4; border-radius: 10px; }
 .import-label { font-size: 13px; font-weight: 500; color: #3D2830; }
 .toggle-wrap { width: 40px; height: 22px; background: #DDD5D7; border-radius: 11px; cursor: pointer; position: relative; transition: background 0.25s; flex-shrink: 0; }

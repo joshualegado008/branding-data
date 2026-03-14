@@ -82,7 +82,7 @@
 
     <!-- ── Empty state ── -->
     <div class="empty-state" v-else-if="filtered.length === 0 && !loading">
-      <div class="empty-icon">📦</div>
+      <i class="bi bi-box-seam empty-bi"></i>
       <div class="empty-title">No products found</div>
       <div class="empty-sub">{{ searchQuery ? 'Try a different search term.' : 'Add your first product to get started.' }}</div>
       <button class="btn-add" @click="openModal()" v-if="!searchQuery">+ Add Product</button>
@@ -307,7 +307,11 @@
                 <div class="scan-line" :class="{ scanning: scannerActive }"></div>
               </div>
             </div>
-            <div class="scan-status" :class="'status-' + scanStatus.type" v-if="scanStatus.msg">
+            <div class="scan-status status-loading" v-if="scanStatus.type === 'loading'">
+              <div class="scan-spinner"></div>
+              {{ scanStatus.msg }}
+            </div>
+            <div class="scan-status" :class="'status-' + scanStatus.type" v-else-if="scanStatus.msg">
               {{ scanStatus.msg }}
             </div>
             <!-- Manual SKU fallback -->
@@ -417,7 +421,7 @@
 
           <!-- Step 4: Success -->
           <div class="scanner-body success-body" v-if="scanStep === 'success'">
-            <div class="success-icon">✅</div>
+            <i class="bi bi-check-circle-fill success-bi"></i>
             <div class="success-title">{{ successMsg }}</div>
             <div class="success-actions">
               <button class="btn-scan-again" @click="resetScanner">Scan Another</button>
@@ -576,44 +580,103 @@ let html5QrScanner  = null
 
 async function loadHtml5Qr() {
   if (window.Html5Qrcode) return
-  await new Promise((res, rej) => {
-    const s = document.createElement('script')
-    s.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'
-    s.onload = res
-    s.onerror = rej
-    document.head.appendChild(s)
-  })
+  // Try unpkg first, fall back to jsDelivr
+  const urls = [
+    'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
+    'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js',
+  ]
+  for (const url of urls) {
+    try {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script')
+        s.src = url
+        s.onload = res
+        s.onerror = rej
+        document.head.appendChild(s)
+      })
+      if (window.Html5Qrcode) return  // loaded OK
+    } catch {}
+  }
 }
 
 async function openScanner() {
   showScanner.value = true
   scanStep.value    = 'scanning'
-  scanStatus.value  = { msg: '', type: '' }
+  scanStatus.value  = { msg: 'Loading scanner…', type: 'loading' }
   manualSku.value   = ''
-  await nextTick()
-  await startCamera()
+  // Pre-load the library in background while modal animates open
+  loadHtml5Qr().then(() => {
+    // Poll until #qr-reader div exists in DOM (mobile can be slow)
+    waitForElement('qr-reader', 3000).then(found => {
+      if (found) startCamera()
+      else {
+        scanStatus.value = { msg: 'Scanner failed to initialize. Use manual SKU entry below.', type: 'warn' }
+      }
+    })
+  })
+}
+
+// Poll for a DOM element by id — mobile rendering can be slow
+function waitForElement(id, timeout = 3000) {
+  return new Promise((resolve) => {
+    const start = Date.now()
+    function check() {
+      if (document.getElementById(id)) { resolve(true); return }
+      if (Date.now() - start > timeout) { resolve(false); return }
+      requestAnimationFrame(check)
+    }
+    check()
+  })
 }
 
 async function startCamera() {
   try {
+    // Chrome Android requires HTTPS for camera access
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+      scanStatus.value = { msg: 'Camera requires HTTPS. Your site must be served over https:// for scanning to work.', type: 'warn' }
+      scannerActive.value = false
+      return
+    }
+
     await loadHtml5Qr()
-    await nextTick()
+
+    if (!window.Html5Qrcode) {
+      scanStatus.value = { msg: 'Scanner library failed to load. Use manual SKU entry below.', type: 'warn' }
+      return
+    }
+
+    // Stop any existing scanner first
     if (html5QrScanner) {
       try { await html5QrScanner.stop() } catch {}
+      try { html5QrScanner.clear() } catch {}
       html5QrScanner = null
     }
+
     html5QrScanner = new window.Html5Qrcode('qr-reader')
     scannerActive.value = true
+    scanStatus.value = { msg: '', type: '' }
+
+    // Request camera — prefer back camera on phones
+    const cameraConfig = { facingMode: 'environment' }
+    const scanConfig   = { fps: 10, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 }
 
     await html5QrScanner.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 220, height: 220 } },
+      cameraConfig,
+      scanConfig,
       (decodedText) => onScanSuccess(decodedText),
-      () => {}   // quiet on errors
+      () => {}  // ignore per-frame errors (normal when no QR in frame)
     )
   } catch (err) {
-    scanStatus.value = { msg: 'Camera unavailable. Use manual SKU entry below.', type: 'warn' }
     scannerActive.value = false
+    const msg = err?.message || String(err)
+
+    if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('notallowed')) {
+      scanStatus.value = { msg: 'Camera permission denied. Please allow camera access in your browser settings, then try again.', type: 'warn' }
+    } else if (msg.toLowerCase().includes('notfound') || msg.toLowerCase().includes('no camera')) {
+      scanStatus.value = { msg: 'No camera found on this device. Use manual SKU entry below.', type: 'warn' }
+    } else {
+      scanStatus.value = { msg: `Camera error: ${msg}. Use manual SKU entry below.`, type: 'warn' }
+    }
   }
 }
 
@@ -621,6 +684,7 @@ async function stopCamera() {
   scannerActive.value = false
   if (html5QrScanner) {
     try { await html5QrScanner.stop() } catch {}
+    try { html5QrScanner.clear() } catch {}
     html5QrScanner = null
   }
 }
@@ -701,11 +765,15 @@ async function doAddNewProduct() {
   }
 }
 
-function resetScanner() {
+async function resetScanner() {
+  await stopCamera()
   scanStep.value   = 'scanning'
   manualSku.value  = ''
-  scanStatus.value = { msg: '', type: '' }
-  nextTick(() => startCamera())
+  scanStatus.value = { msg: 'Loading scanner…', type: 'loading' }
+  waitForElement('qr-reader', 3000).then(found => {
+    if (found) startCamera()
+    else scanStatus.value = { msg: 'Scanner failed to initialize. Use manual SKU entry below.', type: 'warn' }
+  })
 }
 
 async function closeScanner() {
@@ -713,6 +781,7 @@ async function closeScanner() {
   showScanner.value = false
   scanStep.value    = 'scanning'
   manualSku.value   = ''
+  scanStatus.value  = { msg: '', type: '' }
 }
 
 const toast = ref({ show: false, message: '', type: 'success' })
@@ -723,6 +792,7 @@ function showToast(message, type = 'success') {
   toastTimer = setTimeout(() => { toast.value.show = false }, 3000)
 }
 </script>
+
 
 <style scoped>
 
@@ -1015,10 +1085,12 @@ function showToast(message, type = 'success') {
   100% { top: 20px; opacity: 1; }
 }
 
-.scan-status { padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 500; text-align: center; }
-.status-warn  { background: #FFFBEB; color: #D97706; border: 1px solid #FDE68A; }
-.status-error { background: #FFF5F6; color: #B01020; border: 1px solid #FECDD3; }
-.status-ok    { background: #F0FDF4; color: #16A34A; border: 1px solid #BBF7D0; }
+.scan-status { padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 500; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.status-warn    { background: #FFFBEB; color: #D97706; border: 1px solid #FDE68A; }
+.status-error   { background: #FFF5F6; color: #B01020; border: 1px solid #FECDD3; }
+.status-ok      { background: #F0FDF4; color: #16A34A; border: 1px solid #BBF7D0; }
+.status-loading { background: #F7F3F4; color: #6B5257; border: 1px solid #EDE3E5; }
+.scan-spinner   { width: 14px; height: 14px; border: 2px solid #DDD5D7; border-top-color: #B01020; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
 
 /* Manual entry */
 .manual-entry { border-top: 1px solid #F0E5E7; padding-top: 14px; }

@@ -14,6 +14,10 @@
           </svg>
           Manage Equipment
         </button>
+        <router-link to="/dashboard/equipment-scan" class="btn-scan-equip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
+          Scan QR
+        </router-link>
         <button class="btn-add" @click="openBorrowModal()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -105,7 +109,7 @@
     <!-- ══ TAB: BORROW REQUESTS ══ -->
     <div v-else-if="activeTab === 'borrow'">
       <div class="empty-state" v-if="pendingList.length === 0">
-        <div class="empty-icon">📋</div>
+        <i class="bi bi-pc-display empty-bi"></i>
         <div class="empty-title">No pending requests</div>
         <div class="empty-sub">All borrow requests will appear here.</div>
         <button class="btn-add" @click="openBorrowModal()">+ New Borrow Request</button>
@@ -185,7 +189,7 @@
           </div>
 
           <div class="overdue-banner" v-if="isOverdue(r)">
-            ⚠️ {{ daysOverdue(r.expected_return) }} day{{ daysOverdue(r.expected_return) !== 1 ? 's' : '' }} overdue — expected {{ formatDate(r.expected_return) }}
+            <i class="bi bi-exclamation-triangle-fill text-danger me-1"></i>{{ daysOverdue(r.expected_return) }} day{{ daysOverdue(r.expected_return) !== 1 ? 's' : '' }} overdue — expected {{ formatDate(r.expected_return) }}
           </div>
 
           <div class="record-body">
@@ -224,7 +228,7 @@
     <!-- ══ TAB: RETURNED ══ -->
     <div v-else-if="activeTab === 'return'">
       <div class="empty-state" v-if="returnedList.length === 0">
-        <div class="empty-icon">✅</div>
+        <i class="bi bi-check-circle-fill empty-bi" style="color:#16A34A;"></i>
         <div class="empty-title">No returned items yet</div>
         <div class="empty-sub">Completed returns will be logged here.</div>
       </div>
@@ -740,6 +744,7 @@ function showToast(message, type = 'success') {
 }
 </script>
 
+
 <style scoped>
 .equipment-page {
   width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; animation: fadeUp 0.4s both; }
@@ -750,6 +755,15 @@ function showToast(message, type = 'success') {
 .page-sub { font-size: 13px; color: #9A8589; margin-top: 3px; }
 .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
+.btn-scan-equip {
+  display: flex; align-items: center; gap: 7px;
+  padding: 10px 16px; background: white; color: #3D2830;
+  border: 1.5px solid #EDE3E5; border-radius: 11px;
+  font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; white-space: nowrap; transition: all 0.2s;
+  text-decoration: none;
+}
+.btn-scan-equip:hover { border-color: #B01020; color: #B01020; background: #FFF5F6; }
 .btn-add {
   display: flex; align-items: center; gap: 7px;
   padding: 10px 18px; background: #B01020; color: white;
