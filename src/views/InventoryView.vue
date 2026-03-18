@@ -297,15 +297,32 @@
           <!-- Step 1: Scanning -->
           <div class="scanner-body" v-if="scanStep === 'scanning'">
             <div class="scan-hint">Point your camera at a product QR code or barcode</div>
-            <div class="scan-viewport-wrap">
+            <div class="scan-viewport-wrap" :class="{ detected: invQrDetected }">
               <div id="qr-reader" ref="qrReaderEl"></div>
               <div class="scan-overlay">
-                <div class="scan-corner tl"></div>
-                <div class="scan-corner tr"></div>
-                <div class="scan-corner bl"></div>
-                <div class="scan-corner br"></div>
-                <div class="scan-line" :class="{ scanning: scannerActive }"></div>
+                <div class="tracker-box">
+                  <div class="scan-corner tl"></div>
+                  <div class="scan-corner tr"></div>
+                  <div class="scan-corner bl"></div>
+                  <div class="scan-corner br"></div>
+                  <div class="scan-line" :class="{ scanning: scannerActive && !invQrDetected }"></div>
+                  <div class="tk-flash-inv" :class="{ show: invQrDetected }"></div>
+                  <div class="tk-dot-inv" :class="{ pulse: scannerActive }"></div>
+                </div>
+                <button class="torch-btn-inv" @click="toggleInvTorch" :class="{ on: invTorchOn }" v-if="scannerActive" title="Toggle flashlight">
+                  <i :class="invTorchOn ? 'bi bi-lightning-fill' : 'bi bi-lightning'"></i>
+                </button>
               </div>
+            </div>
+            <div class="inv-detect-bar" :class="{ 'bar-found': invQrDetected, 'bar-scanning': scannerActive && !invQrDetected }">
+              <div class="bar-icon-inv">
+                <i v-if="invQrDetected" class="bi bi-check-circle-fill" style="color:#16A34A"></i>
+                <div v-else-if="scannerActive" class="inv-bar-spinner"></div>
+                <i v-else class="bi bi-camera-video-off" style="color:#9A8589"></i>
+              </div>
+              <span v-if="invQrDetected">QR Detected! Processing…</span>
+              <span v-else-if="scannerActive">Scanning… hold QR code 10–20cm from camera</span>
+              <span v-else>Camera initializing…</span>
             </div>
             <div class="scan-status status-loading" v-if="scanStatus.type === 'loading'">
               <div class="scan-spinner"></div>
@@ -569,8 +586,11 @@ async function doDelete() {
 
 // ── QR SCANNER ────────────────────────────────
 const showScanner   = ref(false)
-const scanStep      = ref('scanning')   // scanning | add-stock | new-product | success
+const scanStep      = ref('scanning')
 const scannerActive = ref(false)
+const invQrDetected = ref(false)
+const invTorchOn    = ref(false)
+let   invTorchTrack = null
 const qrReaderEl    = ref(null)
 const manualSku     = ref('')
 const scanStatus    = ref({ msg: '', type: '' })
@@ -670,7 +690,7 @@ async function startCamera() {
 
     // Request camera — prefer back camera on phones
     const cameraConfig = { facingMode: 'environment' }
-    const scanConfig   = { fps: 10, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 }
+    const scanConfig   = { fps: 8, qrbox: { width: 280, height: 280 }, aspectRatio: 1.0, disableFlip: true }
 
     await html5QrScanner.start(
       cameraConfig,
@@ -707,9 +727,23 @@ async function stopCamera() {
   } catch {}
 }
 
-function onScanSuccess(raw) {
+async function toggleInvTorch() {
+  try {
+    if (!invTorchTrack) {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      invTorchTrack = stream.getVideoTracks()[0]
+    }
+    invTorchOn.value = !invTorchOn.value
+    await invTorchTrack.applyConstraints({ advanced: [{ torch: invTorchOn.value }] })
+  } catch {}
+}
+
+async function onScanSuccess(raw) {
   if (scanLock) return
   scanLock = true
+  invQrDetected.value = true
+  await new Promise(r => setTimeout(r, 400))
+  invQrDetected.value = false
   stopCamera()
   let parsed = {}
   try { parsed = JSON.parse(raw) } catch {
@@ -786,6 +820,9 @@ async function doAddNewProduct() {
 
 async function resetScanner() {
   scanLock = false
+  invQrDetected.value = false
+  invTorchOn.value = false
+  invTorchTrack = null
   await stopCamera()
   scanStep.value   = 'scanning'
   manualSku.value  = ''
@@ -1083,30 +1120,66 @@ function showToast(message, type = 'success') {
 
 .scan-hint { font-size: 13px; color: #9A8589; text-align: center; }
 
-.scan-viewport-wrap { position: relative; border-radius: 14px; overflow: hidden; background: #1A1016; }
-#qr-reader { width: 100% !important; border: none !important; }
-#qr-reader video { width: 100% !important; border-radius: 10px; }
+.scan-viewport-wrap {
+  position: relative; border-radius: 14px; overflow: hidden;
+  background: #0A0608; transition: box-shadow 0.3s;
+}
+.scan-viewport-wrap.detected { box-shadow: 0 0 0 3px #16A34A, 0 0 24px rgba(22,163,74,0.4); }
+#qr-reader { width: 100% !important; min-height: 300px; border: none !important; }
+#qr-reader video { width: 100% !important; display: block; }
 #qr-reader img { display: none !important; }
 #qr-reader * { border: none !important; }
 
-/* Scan overlay corners */
-.scan-overlay { position: absolute; inset: 0; pointer-events: none; display: flex; align-items: center; justify-content: center; }
-.scan-corner { position: absolute; width: 24px; height: 24px; border-color: #B01020; border-style: solid; }
-.scan-corner.tl { top: 20px;  left: 20px;  border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
-.scan-corner.tr { top: 20px;  right: 20px; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
-.scan-corner.bl { bottom: 20px; left: 20px;  border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
-.scan-corner.br { bottom: 20px; right: 20px; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+/* Dark overlay with cutout */
+.scan-overlay {
+  position: absolute; inset: 0; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    linear-gradient(#0008 0 0) top / 100% calc(50% - 140px) no-repeat,
+    linear-gradient(#0008 0 0) bottom / 100% calc(50% - 140px) no-repeat,
+    linear-gradient(#0008 0 0) left / calc(50% - 140px) 280px no-repeat,
+    linear-gradient(#0008 0 0) right / calc(50% - 140px) 280px no-repeat;
+}
+.tracker-box { position: absolute; width: 280px; height: 280px; pointer-events: none; }
+
+/* Corner L-brackets */
+.scan-corner { position: absolute; width: 32px; height: 32px; border-color: #B01020; border-style: solid; transition: border-color 0.3s; }
+.scan-viewport-wrap.detected .scan-corner { border-color: #16A34A; }
+.scan-corner.tl { top: 0; left: 0; border-width: 4px 0 0 4px; border-radius: 6px 0 0 0; }
+.scan-corner.tr { top: 0; right: 0; border-width: 4px 4px 0 0; border-radius: 0 6px 0 0; }
+.scan-corner.bl { bottom: 0; left: 0; border-width: 0 0 4px 4px; border-radius: 0 0 0 6px; }
+.scan-corner.br { bottom: 0; right: 0; border-width: 0 4px 4px 0; border-radius: 0 0 6px 0; }
+
+/* Laser line */
 .scan-line {
-  position: absolute; left: 20px; right: 20px; height: 2px;
-  background: linear-gradient(90deg, transparent, #B01020, transparent);
-  top: 20px;
+  position: absolute; left: 8px; right: 8px; height: 2px;
+  background: linear-gradient(90deg, transparent 0%, #B01020 30%, #FF4060 50%, #B01020 70%, transparent 100%);
+  box-shadow: 0 0 8px #B01020; top: 0; opacity: 0;
 }
-.scan-line.scanning { animation: scanMove 2s ease-in-out infinite; }
-@keyframes scanMove {
-  0%   { top: 20px; opacity: 1; }
-  50%  { top: calc(100% - 20px); opacity: 1; }
-  100% { top: 20px; opacity: 1; }
+.scan-line.scanning { opacity: 1; animation: laserScan 1.8s cubic-bezier(0.4,0,0.6,1) infinite; }
+@keyframes laserScan {
+  0%   { top: 8px; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: calc(100% - 8px); opacity: 0; }
 }
+@keyframes scanMove { 0%,100% { top: 8px; } 50% { top: calc(100% - 8px); } }
+
+.tk-flash-inv { position: absolute; inset: 0; background: rgba(22,163,74,0.25); border-radius: 4px; opacity: 0; transition: opacity 0.15s; }
+.tk-flash-inv.show { opacity: 1; }
+.tk-dot-inv { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 8px; height: 8px; background: rgba(176,16,32,0.6); border-radius: 50%; }
+.tk-dot-inv.pulse { animation: dotPulse 2s ease-in-out infinite; }
+@keyframes dotPulse { 0%,100% { transform: translate(-50%,-50%) scale(1); opacity: 0.6; } 50% { transform: translate(-50%,-50%) scale(2); opacity: 0.2; } }
+
+.torch-btn-inv { position: absolute; bottom: 12px; right: 12px; width: 36px; height: 36px; border-radius: 50%; background: rgba(0,0,0,0.55); border: 1.5px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.7); font-size: 15px; cursor: pointer; pointer-events: all; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.torch-btn-inv:hover { background: rgba(0,0,0,0.8); color: white; }
+.torch-btn-inv.on { background: #FCD34D; border-color: #F59E0B; color: #1A1016; }
+
+.inv-detect-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 500; background: #F7F3F4; border: 1.5px solid #EDE3E5; color: #9A8589; transition: all 0.3s; }
+.inv-detect-bar.bar-scanning { color: #6B5257; }
+.inv-detect-bar.bar-found { background: #D1FAE5; border-color: #6EE7B7; color: #065F46; }
+.bar-icon-inv { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; }
+.inv-bar-spinner { width: 14px; height: 14px; border: 2px solid #DDD5D7; border-top-color: #B01020; border-radius: 50%; animation: spin 0.7s linear infinite; }
 
 .scan-status { padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 500; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .status-warn    { background: #FFFBEB; color: #D97706; border: 1px solid #FDE68A; }

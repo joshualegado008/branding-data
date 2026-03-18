@@ -24,15 +24,54 @@
 
         <!-- Step: scanning -->
         <template v-if="step === 'scanning'">
-          <div class="scan-hint">Point camera at the equipment's QR label</div>
-          <div class="scan-viewport">
+          <div class="scan-hint">
+            <i class="bi bi-qr-code-scan"></i>
+            Hold QR code steady inside the frame — keep 10–20 cm away
+          </div>
+
+          <div class="scan-viewport" :class="{ detected: qrDetected }">
             <div id="equip-qr-reader"></div>
+
+            <!-- Dark overlay with cutout -->
             <div class="scan-overlay">
-              <div class="sc-corner tl"></div><div class="sc-corner tr"></div>
-              <div class="sc-corner bl"></div><div class="sc-corner br"></div>
-              <div class="sc-line" :class="{ active: cameraOn }"></div>
+              <!-- Corner trackers — larger zone -->
+              <div class="tracker-box">
+                <div class="tk-corner tl"></div>
+                <div class="tk-corner tr"></div>
+                <div class="tk-corner bl"></div>
+                <div class="tk-corner br"></div>
+                <!-- Scanning laser line -->
+                <div class="tk-line" :class="{ active: cameraOn && !qrDetected }"></div>
+                <!-- Detection flash -->
+                <div class="tk-flash" :class="{ show: qrDetected }"></div>
+                <!-- Center crosshair dot -->
+                <div class="tk-dot" :class="{ pulse: cameraOn }"></div>
+              </div>
+
+              <!-- Torch button -->
+              <button class="torch-btn" @click="toggleTorch" :class="{ on: torchOn }" v-if="cameraOn" title="Toggle flashlight">
+                <i :class="torchOn ? 'bi bi-lightning-fill' : 'bi bi-lightning'"></i>
+              </button>
+
+              <!-- Zoom hint -->
+              <div class="zoom-hint" v-if="cameraOn">
+                <i class="bi bi-zoom-in"></i> Pinch to zoom
+              </div>
             </div>
           </div>
+
+          <!-- Detection feedback bar -->
+          <div class="detect-bar" :class="{ 'bar-found': qrDetected, 'bar-scanning': cameraOn && !qrDetected }">
+            <div class="bar-icon">
+              <i v-if="qrDetected" class="bi bi-check-circle-fill"></i>
+              <div v-else-if="cameraOn" class="bar-spinner"></div>
+              <i v-else class="bi bi-camera-video-off"></i>
+            </div>
+            <span v-if="qrDetected">QR Detected! Processing…</span>
+            <span v-else-if="cameraOn">Scanning… move closer or improve lighting</span>
+            <span v-else>Camera initializing…</span>
+          </div>
+
           <div class="scan-status" :class="'ss-' + status.type" v-if="status.msg">
             <div class="ss-spinner" v-if="status.type === 'loading'"></div>
             {{ status.msg }}
@@ -383,7 +422,10 @@ const formErrors = ref({})
 
 // ── Camera ────────────────────────────────────
 let html5Scanner  = null
-let scanLock      = false   // prevents multiple scan triggers on same QR
+let scanLock      = false
+const qrDetected  = ref(false)
+const torchOn     = ref(false)
+let   torchTrack  = null   // MediaStreamTrack for torch control
 
 async function loadHtml5Qr() {
   if (window.Html5Qrcode) return
@@ -431,7 +473,7 @@ async function startCamera() {
     status.value = { msg: '', type: '' }
     await html5Scanner.start(
       { facingMode: 'environment' },
-      { fps: 5, qrbox: { width: 220, height: 220 }, disableFlip: true },
+      { fps: 8, qrbox: { width: 280, height: 280 }, disableFlip: true },
       (decoded) => onScan(decoded),
       () => {}
     )
@@ -461,12 +503,31 @@ async function stopCamera() {
   } catch {}
 }
 
+// ── Torch toggle ──────────────────────────────
+async function toggleTorch() {
+  try {
+    if (!torchTrack) {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', advanced: [{ torch: true }] }
+      })
+      torchTrack = stream.getVideoTracks()[0]
+    }
+    torchOn.value = !torchOn.value
+    await torchTrack.applyConstraints({ advanced: [{ torch: torchOn.value }] })
+  } catch {
+    // Torch not supported on this device — silently ignore
+  }
+}
+
 // ── Scan processing ───────────────────────────
 async function onScan(raw) {
-  // Prevent multiple triggers from the same scan
   if (scanLock) return
   scanLock = true
+  // Flash detection indicator before stopping camera
+  qrDetected.value = true
+  await new Promise(r => setTimeout(r, 400))
   await stopCamera()
+  qrDetected.value = false
   // Try JSON first (from QR generator), then plain serial
   let code = raw.trim()
   try {
@@ -599,7 +660,10 @@ async function submitReturn() {
 
 // ── Reset ─────────────────────────────────────
 async function resetScan() {
-  scanLock = false   // release lock so next scan works
+  scanLock = false
+  qrDetected.value = false
+  torchOn.value    = false
+  torchTrack       = null
   await stopCamera()
   step.value         = 'scanning'
   foundItem.value    = null
@@ -646,20 +710,121 @@ function showToast(msg, type = 'success') {
 .scan-hint { font-size: 13px; color: #9A8589; text-align: center; }
 
 /* Viewport */
-.scan-viewport { position: relative; border-radius: 14px; overflow: hidden; background: #1A1016; max-width: 380px; margin: 0 auto; width: 100%; }
-#equip-qr-reader { width: 100% !important; }
-#equip-qr-reader video { width: 100% !important; border-radius: 10px; }
+/* ── Scanner viewport ── */
+.scan-viewport { position: relative; border-radius: 14px; overflow: hidden; background: #0A0608; max-width: 420px; margin: 0 auto; width: 100%; transition: box-shadow 0.3s; }
+.scan-viewport.detected { box-shadow: 0 0 0 3px #16A34A, 0 0 24px rgba(22,163,74,0.4); }
+
+#equip-qr-reader { width: 100% !important; min-height: 320px; }
+#equip-qr-reader video { width: 100% !important; display: block; }
 #equip-qr-reader * { border: none !important; }
 #equip-qr-reader img { display: none !important; }
-.scan-overlay { position: absolute; inset: 0; pointer-events: none; display: flex; align-items: center; justify-content: center; }
-.sc-corner { position: absolute; width: 22px; height: 22px; border-color: #B01020; border-style: solid; }
-.sc-corner.tl { top: 16px; left: 16px; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
-.sc-corner.tr { top: 16px; right: 16px; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
-.sc-corner.bl { bottom: 16px; left: 16px; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
-.sc-corner.br { bottom: 16px; right: 16px; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
-.sc-line { position: absolute; left: 16px; right: 16px; height: 2px; background: linear-gradient(90deg, transparent, #B01020, transparent); top: 16px; }
-.sc-line.active { animation: scanMove 2s ease-in-out infinite; }
-@keyframes scanMove { 0%,100% { top: 16px; } 50% { top: calc(100% - 16px); } }
+
+/* Dark overlay with transparent cutout in the middle */
+.scan-overlay {
+  position: absolute; inset: 0; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    linear-gradient(#0008 0 0) top / 100% calc(50% - 140px) no-repeat,
+    linear-gradient(#0008 0 0) bottom / 100% calc(50% - 140px) no-repeat,
+    linear-gradient(#0008 0 0) left / calc(50% - 140px) 280px no-repeat,
+    linear-gradient(#0008 0 0) right / calc(50% - 140px) 280px no-repeat;
+}
+
+/* Tracker box — the clear scanning zone */
+.tracker-box {
+  position: absolute;
+  width: 280px; height: 280px;
+  pointer-events: none;
+}
+
+/* Corner L-brackets */
+.tk-corner { position: absolute; width: 32px; height: 32px; border-color: #B01020; border-style: solid; transition: border-color 0.3s; }
+.scan-viewport.detected .tk-corner { border-color: #16A34A; }
+.tk-corner.tl { top: 0; left: 0; border-width: 4px 0 0 4px; border-radius: 6px 0 0 0; }
+.tk-corner.tr { top: 0; right: 0; border-width: 4px 4px 0 0; border-radius: 0 6px 0 0; }
+.tk-corner.bl { bottom: 0; left: 0; border-width: 0 0 4px 4px; border-radius: 0 0 0 6px; }
+.tk-corner.br { bottom: 0; right: 0; border-width: 0 4px 4px 0; border-radius: 0 0 6px 0; }
+
+/* Laser scan line */
+.tk-line {
+  position: absolute; left: 8px; right: 8px; height: 2px;
+  background: linear-gradient(90deg, transparent 0%, #B01020 30%, #FF4060 50%, #B01020 70%, transparent 100%);
+  box-shadow: 0 0 8px #B01020, 0 0 2px #FF4060;
+  top: 0; opacity: 0;
+}
+.tk-line.active {
+  opacity: 1;
+  animation: laserScan 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes laserScan {
+  0%   { top: 8px; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: calc(100% - 8px); opacity: 0; }
+}
+
+/* Detection flash overlay */
+.tk-flash {
+  position: absolute; inset: 0;
+  background: rgba(22, 163, 74, 0.25);
+  border-radius: 4px;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.15s;
+}
+.tk-flash.show { opacity: 1; }
+
+/* Center crosshair dot */
+.tk-dot {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px; height: 8px;
+  background: rgba(176,16,32,0.6);
+  border-radius: 50%;
+}
+.tk-dot.pulse { animation: dotPulse 2s ease-in-out infinite; }
+@keyframes dotPulse {
+  0%, 100% { transform: translate(-50%,-50%) scale(1); opacity: 0.6; }
+  50%       { transform: translate(-50%,-50%) scale(2); opacity: 0.2; }
+}
+
+/* Torch button */
+.torch-btn {
+  position: absolute; bottom: 12px; right: 12px;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(0,0,0,0.55); border: 1.5px solid rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.7); font-size: 15px;
+  cursor: pointer; pointer-events: all;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.torch-btn:hover { background: rgba(0,0,0,0.8); color: white; }
+.torch-btn.on { background: #FCD34D; border-color: #F59E0B; color: #1A1016; }
+
+/* Zoom hint */
+.zoom-hint {
+  position: absolute; bottom: 12px; left: 12px;
+  font-size: 10px; color: rgba(255,255,255,0.5);
+  display: flex; align-items: center; gap: 4px;
+  background: rgba(0,0,0,0.4); padding: 4px 8px; border-radius: 20px;
+}
+
+/* Detection feedback bar */
+.detect-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 10px;
+  font-size: 13px; font-weight: 500;
+  background: #F7F3F4; border: 1.5px solid #EDE3E5;
+  color: #9A8589; transition: all 0.3s;
+  max-width: 420px; margin: 0 auto; width: 100%;
+}
+.detect-bar.bar-scanning { background: #F7F3F4; border-color: #EDE3E5; color: #6B5257; }
+.detect-bar.bar-found    { background: #D1FAE5; border-color: #6EE7B7; color: #065F46; }
+.bar-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.bar-spinner { width: 14px; height: 14px; border: 2px solid #DDD5D7; border-top-color: #B01020; border-radius: 50%; animation: spin 0.7s linear infinite; }
+
+/* Scan hint */
+.scan-hint { display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px; color: #9A8589; text-align: center; }
 
 /* Status */
 .scan-status { padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 500; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; max-width: 380px; margin: 0 auto; width: 100%; }
