@@ -577,8 +577,7 @@ function drawThumb(canvas, qr) {
 }
 
 // ── PRINT ─────────────────────────────────────
-const printing    = ref(false)
-let   printIframe = null
+const printing = ref(false)
 
 async function printSelected() {
   const items = filteredQR.value.filter(q => selectedIds.value.has(q.id))
@@ -597,27 +596,47 @@ async function doPrint(items) {
   printing.value = true
   await loadQRious()
   try {
+    // Build labels with embedded QR data URLs
     const labels = []
     for (const qr of items) {
       const canvas = document.createElement('canvas')
       await drawQR(canvas, buildPayload(qr), qr.label_size || 150, qr.label_style || 'classic')
       const qrDataUrl = canvas.toDataURL('image/png')
-      for (let c = 0; c < (qr.copies || 1); c++) {
+      for (let i = 0; i < (qr.copies || 1); i++) {
         labels.push({ ...qr, qrDataUrl })
       }
     }
+
     const html = buildPrintHtml(labels)
-    if (!printIframe) {
-      printIframe = document.createElement('iframe')
-      printIframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:210mm;height:297mm;border:none;'
-      document.body.appendChild(printIframe)
+
+    // Use Blob URL → opens in a real Chrome tab → Chrome print dialog (not Epson fax)
+    const blob = new Blob([html], { type: 'text/html' })
+    const blobUrl = URL.createObjectURL(blob)
+    const win = window.open(blobUrl, '_blank')
+
+    if (!win) {
+      // Popup blocked — fallback to iframe
+      const iframe = document.createElement('iframe')
+      iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;'
+      document.body.appendChild(iframe)
+      iframe.contentDocument.open()
+      iframe.contentDocument.write(html)
+      iframe.contentDocument.close()
+      await new Promise(r => setTimeout(r, 1000))
+      iframe.contentWindow.print()
+      setTimeout(() => document.body.removeChild(iframe), 3000)
+    } else {
+      // Clean up blob URL after window loads
+      win.onload = () => {
+        setTimeout(() => {
+          win.print()
+          URL.revokeObjectURL(blobUrl)
+        }, 500)
+      }
+      // Fallback if onload doesn't fire
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000)
     }
-    printIframe.contentDocument.open()
-    printIframe.contentDocument.write(html)
-    printIframe.contentDocument.close()
-    await new Promise(r => setTimeout(r, 900))
-    printIframe.contentWindow.focus()
-    printIframe.contentWindow.print()
+
     showToast('Print dialog opened!', 'success')
   } catch (err) {
     showToast('Print error: ' + err.message, 'error')
@@ -651,18 +670,23 @@ function buildPrintHtml(labels) {
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap');
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Outfit',sans-serif;background:#f5f5f5;padding:10mm}
-    .grid{display:flex;flex-wrap:wrap;gap:4mm}
-    .label{display:flex;align-items:center;gap:7px;border-radius:8px;padding:8px 10px;page-break-inside:avoid;break-inside:avoid;width:8.5cm;min-height:4.5cm}
-    .label-qr{flex-shrink:0;width:35%;aspect-ratio:1/1;image-rendering:pixelated}
-    .label-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-    .label-name{font-size:9pt;font-weight:700;line-height:1.2;word-break:break-word}
-    .label-sku{font-size:7pt;font-weight:700;font-family:monospace}
-    .label-supplier{font-size:6pt;opacity:.75}
-    .label-meta{font-size:6pt;opacity:.6}
+    body{font-family:'Outfit',sans-serif;background:white;padding:10mm}
+    /* Grid: 2 columns on A4, auto rows */
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:5mm;width:100%}
+    .label{display:flex;align-items:center;gap:8px;border-radius:8px;padding:10px 12px;page-break-inside:avoid;break-inside:avoid;border:1.5px solid #ccc;box-sizing:border-box}
+    .label-qr{flex-shrink:0;width:28%;aspect-ratio:1/1;image-rendering:pixelated}
+    .label-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+    .label-name{font-size:9.5pt;font-weight:700;line-height:1.2;word-break:break-word}
+    .label-sku{font-size:7.5pt;font-weight:700;font-family:monospace}
+    .label-supplier{font-size:7pt;opacity:.75}
+    .label-meta{font-size:6.5pt;opacity:.6}
     .label-notes{font-size:6pt;font-style:italic;opacity:.65}
-    .label-brand{font-size:5.5pt;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-top:4px;padding-top:3px;border-top:.5px solid #eee;opacity:.7}
-    @media print{body{background:white;padding:8mm}@page{margin:8mm}}
+    .label-brand{font-size:5.5pt;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-top:4px;padding-top:3px;border-top:.5px solid #ddd;opacity:.7}
+    @media print{
+      body{background:white;padding:0;margin:0}
+      @page{margin:10mm;size:A4 portrait}
+      .grid{gap:4mm}
+    }
   </style></head>
   <body><div class="grid">${labelHtml}</div></body></html>`
 }
