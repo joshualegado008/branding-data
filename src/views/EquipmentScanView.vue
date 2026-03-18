@@ -550,63 +550,85 @@ async function toggleTorch() {
 
 // ── Bounding box drawing ─────────────────────
 function drawBoundingBox(result) {
-  const canvas = bboxCanvas.value
-  if (!canvas) return
+  try {
+    const canvas = bboxCanvas.value
+    if (!canvas) return
 
-  // Size canvas to match the video element
-  const videoEl = document.querySelector('#equip-qr-reader video')
-  if (!videoEl) return
-  canvas.width  = videoEl.offsetWidth
-  canvas.height = videoEl.offsetHeight
+    const videoEl = document.querySelector('#equip-qr-reader video')
+    if (!videoEl) return
 
-  const ctx = canvas.getContext('2d')
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
+    // Always match canvas pixel size to the displayed video size
+    const rect   = videoEl.getBoundingClientRect()
+    canvas.width  = rect.width  || videoEl.offsetWidth  || 300
+    canvas.height = rect.height || videoEl.offsetHeight || 300
 
-  // Get corner points from result
-  const loc = result?.location
-  if (!loc) return
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-  const points = [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner]
-  if (points.some(p => !p)) return
+    // html5-qrcode v2.x result structure:
+    // result.location has topLeftCorner, topRightCorner, bottomRightCorner, bottomLeftCorner
+    // Each corner is { x, y } in VIDEO pixel space (not screen space)
+    const loc = result?.location || result?.result?.location
+    if (!loc) return
 
-  // Scale points from QR coordinate space to canvas size
-  const scaleX = canvas.width  / (videoEl.videoWidth  || canvas.width)
-  const scaleY = canvas.height / (videoEl.videoHeight || canvas.height)
+    const raw = [
+      loc.topLeftCorner,
+      loc.topRightCorner,
+      loc.bottomRightCorner,
+      loc.bottomLeftCorner,
+    ]
+    if (raw.some(p => !p || p.x == null)) return
 
-  // Draw filled semi-transparent overlay
-  ctx.beginPath()
-  ctx.moveTo(points[0].x * scaleX, points[0].y * scaleY)
-  points.forEach(p => ctx.lineTo(p.x * scaleX, p.y * scaleY))
-  ctx.closePath()
-  ctx.fillStyle   = 'rgba(22, 163, 74, 0.15)'
-  ctx.fill()
+    // Scale from video native resolution to canvas display size
+    const vw = videoEl.videoWidth  || canvas.width
+    const vh = videoEl.videoHeight || canvas.height
+    const sx = canvas.width  / vw
+    const sy = canvas.height / vh
 
-  // Draw solid green outline
-  ctx.beginPath()
-  ctx.moveTo(points[0].x * scaleX, points[0].y * scaleY)
-  points.forEach(p => ctx.lineTo(p.x * scaleX, p.y * scaleY))
-  ctx.closePath()
-  ctx.strokeStyle = '#16A34A'
-  ctx.lineWidth   = 3
-  ctx.shadowColor = '#16A34A'
-  ctx.shadowBlur  = 8
-  ctx.stroke()
+    const pts = raw.map(p => ({ x: p.x * sx, y: p.y * sy }))
 
-  // Draw corner dots
-  ctx.shadowBlur = 0
-  points.forEach(p => {
+    // Green fill
     ctx.beginPath()
-    ctx.arc(p.x * scaleX, p.y * scaleY, 5, 0, Math.PI * 2)
-    ctx.fillStyle = '#16A34A'
+    ctx.moveTo(pts[0].x, pts[0].y)
+    pts.slice(1).forEach(p => ctx.lineTo(p.x, p.y))
+    ctx.closePath()
+    ctx.fillStyle = 'rgba(22,163,74,0.18)'
     ctx.fill()
-  })
 
-  // Auto-clear after 600ms
-  if (bboxClear) clearTimeout(bboxClear)
-  bboxClear = setTimeout(() => {
-    const c2 = bboxCanvas.value
-    if (c2) c2.getContext('2d').clearRect(0, 0, c2.width, c2.height)
-  }, 600)
+    // Green stroke
+    ctx.beginPath()
+    ctx.moveTo(pts[0].x, pts[0].y)
+    pts.slice(1).forEach(p => ctx.lineTo(p.x, p.y))
+    ctx.closePath()
+    ctx.strokeStyle = '#16A34A'
+    ctx.lineWidth   = 3
+    ctx.shadowColor = 'rgba(22,163,74,0.8)'
+    ctx.shadowBlur  = 10
+    ctx.stroke()
+    ctx.shadowBlur  = 0
+
+    // Corner dots
+    pts.forEach(p => {
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, 6, 0, Math.PI * 2)
+      ctx.fillStyle = '#16A34A'
+      ctx.fill()
+      // White center
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2)
+      ctx.fillStyle = 'white'
+      ctx.fill()
+    })
+
+    // Auto-clear after 800ms
+    if (bboxClear) clearTimeout(bboxClear)
+    bboxClear = setTimeout(() => {
+      const cv = bboxCanvas.value
+      if (cv) cv.getContext('2d').clearRect(0, 0, cv.width, cv.height)
+    }, 800)
+  } catch (e) {
+    // Never crash the app over a drawing error
+  }
 }
 
 // ── Scan processing ───────────────────────────
@@ -806,9 +828,11 @@ function showToast(msg, type = 'success') {
 .bbox-canvas {
   position: absolute;
   top: 0; left: 0;
-  width: 100%; height: 100%;
+  width: 100% !important;
+  height: 100% !important;
   pointer-events: none;
-  z-index: 10;
+  z-index: 20;
+  display: block;
 }
 .scan-viewport.detected { box-shadow: 0 0 0 3px #16A34A, 0 0 24px rgba(22,163,74,0.4); }
 

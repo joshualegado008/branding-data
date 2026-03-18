@@ -740,50 +740,67 @@ async function stopCamera() {
 
 // ── Bounding box drawing ─────────────────────
 function drawInvBoundingBox(result) {
-  const canvas = invBboxCanvas.value
-  if (!canvas) return
-  const videoEl = document.querySelector('#qr-reader video')
-  if (!videoEl) return
-  canvas.width  = videoEl.offsetWidth
-  canvas.height = videoEl.offsetHeight
-  const ctx = canvas.getContext('2d')
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
-  const loc = result?.location
-  if (!loc) return
-  const points = [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner]
-  if (points.some(p => !p)) return
-  const scaleX = canvas.width  / (videoEl.videoWidth  || canvas.width)
-  const scaleY = canvas.height / (videoEl.videoHeight || canvas.height)
-  // Fill
-  ctx.beginPath()
-  ctx.moveTo(points[0].x * scaleX, points[0].y * scaleY)
-  points.forEach(p => ctx.lineTo(p.x * scaleX, p.y * scaleY))
-  ctx.closePath()
-  ctx.fillStyle = 'rgba(22, 163, 74, 0.15)'
-  ctx.fill()
-  // Outline
-  ctx.beginPath()
-  ctx.moveTo(points[0].x * scaleX, points[0].y * scaleY)
-  points.forEach(p => ctx.lineTo(p.x * scaleX, p.y * scaleY))
-  ctx.closePath()
-  ctx.strokeStyle = '#16A34A'
-  ctx.lineWidth   = 3
-  ctx.shadowColor = '#16A34A'
-  ctx.shadowBlur  = 8
-  ctx.stroke()
-  // Corner dots
-  ctx.shadowBlur = 0
-  points.forEach(p => {
+  try {
+    const canvas = invBboxCanvas.value
+    if (!canvas) return
+    const videoEl = document.querySelector('#qr-reader video')
+    if (!videoEl) return
+
+    const rect   = videoEl.getBoundingClientRect()
+    canvas.width  = rect.width  || videoEl.offsetWidth  || 300
+    canvas.height = rect.height || videoEl.offsetHeight || 300
+
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    const loc = result?.location || result?.result?.location
+    if (!loc) return
+
+    const raw = [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner]
+    if (raw.some(p => !p || p.x == null)) return
+
+    const sx = canvas.width  / (videoEl.videoWidth  || canvas.width)
+    const sy = canvas.height / (videoEl.videoHeight || canvas.height)
+    const pts = raw.map(p => ({ x: p.x * sx, y: p.y * sy }))
+
+    // Green fill
     ctx.beginPath()
-    ctx.arc(p.x * scaleX, p.y * scaleY, 5, 0, Math.PI * 2)
-    ctx.fillStyle = '#16A34A'
+    ctx.moveTo(pts[0].x, pts[0].y)
+    pts.slice(1).forEach(p => ctx.lineTo(p.x, p.y))
+    ctx.closePath()
+    ctx.fillStyle = 'rgba(22,163,74,0.18)'
     ctx.fill()
-  })
-  if (invBboxClear) clearTimeout(invBboxClear)
-  invBboxClear = setTimeout(() => {
-    const cv = invBboxCanvas.value
-    if (cv) cv.getContext('2d').clearRect(0, 0, cv.width, cv.height)
-  }, 600)
+
+    // Green stroke
+    ctx.beginPath()
+    ctx.moveTo(pts[0].x, pts[0].y)
+    pts.slice(1).forEach(p => ctx.lineTo(p.x, p.y))
+    ctx.closePath()
+    ctx.strokeStyle = '#16A34A'
+    ctx.lineWidth   = 3
+    ctx.shadowColor = 'rgba(22,163,74,0.8)'
+    ctx.shadowBlur  = 10
+    ctx.stroke()
+    ctx.shadowBlur  = 0
+
+    // Corner dots with white center
+    pts.forEach(p => {
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, 6, 0, Math.PI * 2)
+      ctx.fillStyle = '#16A34A'
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2)
+      ctx.fillStyle = 'white'
+      ctx.fill()
+    })
+
+    if (invBboxClear) clearTimeout(invBboxClear)
+    invBboxClear = setTimeout(() => {
+      const cv = invBboxCanvas.value
+      if (cv) cv.getContext('2d').clearRect(0, 0, cv.width, cv.height)
+    }, 800)
+  } catch (e) {}
 }
 
 async function killInvTorch() {
@@ -1194,9 +1211,13 @@ function showToast(message, type = 'success') {
   background: #0A0608; transition: box-shadow 0.3s;
 }
 .bbox-canvas-inv {
-  position: absolute; top: 0; left: 0;
-  width: 100%; height: 100%;
-  pointer-events: none; z-index: 10;
+  position: absolute;
+  top: 0; left: 0;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none;
+  z-index: 20;
+  display: block;
 }
 .scan-viewport-wrap.detected { box-shadow: 0 0 0 3px #16A34A, 0 0 24px rgba(22,163,74,0.4); }
 #qr-reader { width: 100% !important; min-height: 300px; border: none !important; }
