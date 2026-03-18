@@ -299,6 +299,7 @@
             <div class="scan-hint">Point your camera at a product QR code or barcode</div>
             <div class="scan-viewport-wrap" :class="{ detected: invQrDetected }">
               <div id="qr-reader" ref="qrReaderEl"></div>
+              <canvas ref="invBboxCanvas" class="bbox-canvas-inv"></canvas>
               <div class="scan-overlay">
                 <div class="tracker-box">
                   <div class="scan-corner tl"></div>
@@ -471,9 +472,10 @@ onMounted(async () => {
   await Promise.all([fetchProducts(), fetchCategories()])
   subscribeRealtime()
 })
-onUnmounted(() => {
+onUnmounted(async () => {
+  await killInvTorch()  // turn off flashlight immediately when leaving page
   unsubscribeRealtime()
-  stopCamera()  // ensure camera is released when leaving the page
+  stopCamera()
 })
 
 // ── Search + Filter ───────────────────────────
@@ -588,9 +590,11 @@ async function doDelete() {
 const showScanner   = ref(false)
 const scanStep      = ref('scanning')
 const scannerActive = ref(false)
-const invQrDetected = ref(false)
-const invTorchOn    = ref(false)
-let   invTorchTrack = null
+const invQrDetected  = ref(false)
+const invTorchOn     = ref(false)
+let   invTorchTrack  = null
+const invBboxCanvas  = ref(null)
+let   invBboxClear   = null
 const qrReaderEl    = ref(null)
 const manualSku     = ref('')
 const scanStatus    = ref({ msg: '', type: '' })
@@ -690,13 +694,16 @@ async function startCamera() {
 
     // Request camera — prefer back camera on phones
     const cameraConfig = { facingMode: 'environment' }
-    const scanConfig   = { fps: 8, qrbox: { width: 280, height: 280 }, aspectRatio: 1.0, disableFlip: true }
+    const scanConfig = { fps: 8, qrbox: { width: 280, height: 280 }, aspectRatio: 1.0, disableFlip: true }
 
     await html5QrScanner.start(
       cameraConfig,
       scanConfig,
-      (decodedText) => onScanSuccess(decodedText),
-      () => {}  // ignore per-frame errors (normal when no QR in frame)
+      (decodedText, result) => {
+        drawInvBoundingBox(result)
+        onScanSuccess(decodedText)
+      },
+      () => {}
     )
   } catch (err) {
     scannerActive.value = false
@@ -714,17 +721,78 @@ async function startCamera() {
 
 async function stopCamera() {
   scannerActive.value = false
+  // Clear bounding box canvas
+  if (invBboxCanvas.value) {
+    invBboxCanvas.value.getContext('2d').clearRect(0, 0, invBboxCanvas.value.width, invBboxCanvas.value.height)
+  }
+  if (invBboxClear) { clearTimeout(invBboxClear); invBboxClear = null }
   if (html5QrScanner) {
     try { await html5QrScanner.stop() } catch {}
     try { html5QrScanner.clear() } catch {}
     html5QrScanner = null
   }
-  // Kill any orphaned video streams left in the DOM
   try {
     document.querySelectorAll('#qr-reader video').forEach(v => {
       try { v.srcObject?.getTracks()?.forEach(t => t.stop()); v.srcObject = null } catch {}
     })
   } catch {}
+}
+
+// ── Bounding box drawing ─────────────────────
+function drawInvBoundingBox(result) {
+  const canvas = invBboxCanvas.value
+  if (!canvas) return
+  const videoEl = document.querySelector('#qr-reader video')
+  if (!videoEl) return
+  canvas.width  = videoEl.offsetWidth
+  canvas.height = videoEl.offsetHeight
+  const ctx = canvas.getContext('2d')
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  const loc = result?.location
+  if (!loc) return
+  const points = [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner]
+  if (points.some(p => !p)) return
+  const scaleX = canvas.width  / (videoEl.videoWidth  || canvas.width)
+  const scaleY = canvas.height / (videoEl.videoHeight || canvas.height)
+  // Fill
+  ctx.beginPath()
+  ctx.moveTo(points[0].x * scaleX, points[0].y * scaleY)
+  points.forEach(p => ctx.lineTo(p.x * scaleX, p.y * scaleY))
+  ctx.closePath()
+  ctx.fillStyle = 'rgba(22, 163, 74, 0.15)'
+  ctx.fill()
+  // Outline
+  ctx.beginPath()
+  ctx.moveTo(points[0].x * scaleX, points[0].y * scaleY)
+  points.forEach(p => ctx.lineTo(p.x * scaleX, p.y * scaleY))
+  ctx.closePath()
+  ctx.strokeStyle = '#16A34A'
+  ctx.lineWidth   = 3
+  ctx.shadowColor = '#16A34A'
+  ctx.shadowBlur  = 8
+  ctx.stroke()
+  // Corner dots
+  ctx.shadowBlur = 0
+  points.forEach(p => {
+    ctx.beginPath()
+    ctx.arc(p.x * scaleX, p.y * scaleY, 5, 0, Math.PI * 2)
+    ctx.fillStyle = '#16A34A'
+    ctx.fill()
+  })
+  if (invBboxClear) clearTimeout(invBboxClear)
+  invBboxClear = setTimeout(() => {
+    const cv = invBboxCanvas.value
+    if (cv) cv.getContext('2d').clearRect(0, 0, cv.width, cv.height)
+  }, 600)
+}
+
+async function killInvTorch() {
+  if (invTorchTrack) {
+    try { await invTorchTrack.applyConstraints({ advanced: [{ torch: false }] }) } catch {}
+    try { invTorchTrack.stop() } catch {}
+    invTorchTrack    = null
+    invTorchOn.value = false
+  }
 }
 
 async function toggleInvTorch() {
@@ -821,8 +889,7 @@ async function doAddNewProduct() {
 async function resetScanner() {
   scanLock = false
   invQrDetected.value = false
-  invTorchOn.value = false
-  invTorchTrack = null
+  await killInvTorch()  // turn off torch before restarting camera
   await stopCamera()
   scanStep.value   = 'scanning'
   manualSku.value  = ''
@@ -835,6 +902,7 @@ async function resetScanner() {
 
 async function closeScanner() {
   scanLock = false
+  await killInvTorch()  // turn off torch when closing scanner
   await stopCamera()
   showScanner.value = false
   scanStep.value    = 'scanning'
@@ -842,6 +910,7 @@ async function closeScanner() {
   scanStatus.value  = { msg: '', type: '' }
   scannedData.value  = {}
   scannedProduct.value = null
+  invQrDetected.value  = false
 }
 
 const toast = ref({ show: false, message: '', type: 'success' })
@@ -1123,6 +1192,11 @@ function showToast(message, type = 'success') {
 .scan-viewport-wrap {
   position: relative; border-radius: 14px; overflow: hidden;
   background: #0A0608; transition: box-shadow 0.3s;
+}
+.bbox-canvas-inv {
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none; z-index: 10;
 }
 .scan-viewport-wrap.detected { box-shadow: 0 0 0 3px #16A34A, 0 0 24px rgba(22,163,74,0.4); }
 #qr-reader { width: 100% !important; min-height: 300px; border: none !important; }

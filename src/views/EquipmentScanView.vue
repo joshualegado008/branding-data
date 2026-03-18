@@ -31,6 +31,8 @@
 
           <div class="scan-viewport" :class="{ detected: qrDetected }">
             <div id="equip-qr-reader"></div>
+            <!-- Bounding box canvas — drawn on top of video -->
+            <canvas ref="bboxCanvas" class="bbox-canvas"></canvas>
 
             <!-- Dark overlay with cutout -->
             <div class="scan-overlay">
@@ -379,7 +381,8 @@ onMounted(async () => {
   })
 })
 
-onUnmounted(() => {
+onUnmounted(async () => {
+  await killTorch()   // turn off flashlight immediately
   stopCamera()
   // Kill ALL camera tracks — ensures no ghost stream persists after page change
   try {
@@ -425,7 +428,9 @@ let html5Scanner  = null
 let scanLock      = false
 const qrDetected  = ref(false)
 const torchOn     = ref(false)
-let   torchTrack  = null   // MediaStreamTrack for torch control
+let   torchTrack  = null
+const bboxCanvas  = ref(null)
+let   bboxClear   = null   // timeout to clear the drawn box
 
 async function loadHtml5Qr() {
   if (window.Html5Qrcode) return
@@ -473,8 +478,19 @@ async function startCamera() {
     status.value = { msg: '', type: '' }
     await html5Scanner.start(
       { facingMode: 'environment' },
-      { fps: 8, qrbox: { width: 280, height: 280 }, disableFlip: true },
-      (decoded) => onScan(decoded),
+      {
+        fps: 8,
+        qrbox: { width: 280, height: 280 },
+        disableFlip: true,
+        aspectRatio: 1.0,
+        // Draw bounding box around detected QR
+        formatsToSupport: [ window.Html5QrcodeSupportedFormats?.QR_CODE ].filter(Boolean),
+      },
+      (decoded, result) => {
+        // Draw bounding box from result corners
+        drawBoundingBox(result)
+        onScan(decoded)
+      },
       () => {}
     )
   } catch (err) {
@@ -490,12 +506,16 @@ async function startCamera() {
 
 async function stopCamera() {
   cameraOn.value = false
+  // Clear bounding box canvas
+  if (bboxCanvas.value) {
+    bboxCanvas.value.getContext('2d').clearRect(0, 0, bboxCanvas.value.width, bboxCanvas.value.height)
+  }
+  if (bboxClear) { clearTimeout(bboxClear); bboxClear = null }
   if (html5Scanner) {
     try { await html5Scanner.stop() } catch {}
     try { html5Scanner.clear() } catch {}
     html5Scanner = null
   }
-  // Kill any orphaned video streams
   try {
     document.querySelectorAll('#equip-qr-reader video').forEach(v => {
       try { v.srcObject?.getTracks()?.forEach(t => t.stop()); v.srcObject = null } catch {}
@@ -504,11 +524,20 @@ async function stopCamera() {
 }
 
 // ── Torch toggle ──────────────────────────────
+async function killTorch() {
+  if (torchTrack) {
+    try { await torchTrack.applyConstraints({ advanced: [{ torch: false }] }) } catch {}
+    try { torchTrack.stop() } catch {}
+    torchTrack     = null
+    torchOn.value  = false
+  }
+}
+
 async function toggleTorch() {
   try {
     if (!torchTrack) {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', advanced: [{ torch: true }] }
+        video: { facingMode: 'environment' }
       })
       torchTrack = stream.getVideoTracks()[0]
     }
@@ -517,6 +546,67 @@ async function toggleTorch() {
   } catch {
     // Torch not supported on this device — silently ignore
   }
+}
+
+// ── Bounding box drawing ─────────────────────
+function drawBoundingBox(result) {
+  const canvas = bboxCanvas.value
+  if (!canvas) return
+
+  // Size canvas to match the video element
+  const videoEl = document.querySelector('#equip-qr-reader video')
+  if (!videoEl) return
+  canvas.width  = videoEl.offsetWidth
+  canvas.height = videoEl.offsetHeight
+
+  const ctx = canvas.getContext('2d')
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+  // Get corner points from result
+  const loc = result?.location
+  if (!loc) return
+
+  const points = [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner]
+  if (points.some(p => !p)) return
+
+  // Scale points from QR coordinate space to canvas size
+  const scaleX = canvas.width  / (videoEl.videoWidth  || canvas.width)
+  const scaleY = canvas.height / (videoEl.videoHeight || canvas.height)
+
+  // Draw filled semi-transparent overlay
+  ctx.beginPath()
+  ctx.moveTo(points[0].x * scaleX, points[0].y * scaleY)
+  points.forEach(p => ctx.lineTo(p.x * scaleX, p.y * scaleY))
+  ctx.closePath()
+  ctx.fillStyle   = 'rgba(22, 163, 74, 0.15)'
+  ctx.fill()
+
+  // Draw solid green outline
+  ctx.beginPath()
+  ctx.moveTo(points[0].x * scaleX, points[0].y * scaleY)
+  points.forEach(p => ctx.lineTo(p.x * scaleX, p.y * scaleY))
+  ctx.closePath()
+  ctx.strokeStyle = '#16A34A'
+  ctx.lineWidth   = 3
+  ctx.shadowColor = '#16A34A'
+  ctx.shadowBlur  = 8
+  ctx.stroke()
+
+  // Draw corner dots
+  ctx.shadowBlur = 0
+  points.forEach(p => {
+    ctx.beginPath()
+    ctx.arc(p.x * scaleX, p.y * scaleY, 5, 0, Math.PI * 2)
+    ctx.fillStyle = '#16A34A'
+    ctx.fill()
+  })
+
+  // Auto-clear after 600ms
+  if (bboxClear) clearTimeout(bboxClear)
+  bboxClear = setTimeout(() => {
+    const c2 = bboxCanvas.value
+    if (c2) c2.getContext('2d').clearRect(0, 0, c2.width, c2.height)
+  }, 600)
 }
 
 // ── Scan processing ───────────────────────────
@@ -662,8 +752,7 @@ async function submitReturn() {
 async function resetScan() {
   scanLock = false
   qrDetected.value = false
-  torchOn.value    = false
-  torchTrack       = null
+  await killTorch()   // turn off torch before restarting
   await stopCamera()
   step.value         = 'scanning'
   foundItem.value    = null
@@ -712,6 +801,15 @@ function showToast(msg, type = 'success') {
 /* Viewport */
 /* ── Scanner viewport ── */
 .scan-viewport { position: relative; border-radius: 14px; overflow: hidden; background: #0A0608; max-width: 420px; margin: 0 auto; width: 100%; transition: box-shadow 0.3s; }
+
+/* Bounding box canvas — sits on top of video, pointer-events off */
+.bbox-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
 .scan-viewport.detected { box-shadow: 0 0 0 3px #16A34A, 0 0 24px rgba(22,163,74,0.4); }
 
 #equip-qr-reader { width: 100% !important; min-height: 320px; }
