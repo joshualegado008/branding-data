@@ -66,6 +66,25 @@
           <div class="summary-label">Total Products</div>
         </div>
       </div>
+      <!-- Room 1 cards -->
+      <div class="summary-card summary-red" v-if="room1OutOfStock.length">
+        <div class="summary-icon">
+          <i class="bi bi-door-open" style="font-size:18px;"></i>
+        </div>
+        <div>
+          <div class="summary-val">{{ room1OutOfStock.length }}</div>
+          <div class="summary-label">Room 1 Empty</div>
+        </div>
+      </div>
+      <div class="summary-card summary-amber" v-if="room1LowStock.length">
+        <div class="summary-icon">
+          <i class="bi bi-door-open" style="font-size:18px;"></i>
+        </div>
+        <div>
+          <div class="summary-val">{{ room1LowStock.length }}</div>
+          <div class="summary-label">Room 1 Low</div>
+        </div>
+      </div>
     </div>
 
     <!-- ── Filter tabs ── -->
@@ -84,6 +103,11 @@
         Low Stock
         <span class="ftab-count">{{ lowStock.length }}</span>
       </button>
+      <button class="ftab ftab-room1" :class="{ active: filter === 'room1' }" @click="filter = 'room1'" v-if="room1LowStock.length || room1OutOfStock.length">
+        <i class="bi bi-door-open"></i>
+        Room 1
+        <span class="ftab-count ftab-count-r1">{{ room1LowStock.length + room1OutOfStock.length }}</span>
+      </button>
     </div>
 
     <!-- ── Loading ── -->
@@ -93,10 +117,40 @@
     </div>
 
     <!-- ── Empty ── -->
-    <div class="empty-state" v-else-if="filteredAlerts.length === 0">
+    <div class="empty-state" v-else-if="filteredAlerts.length === 0 && filter !== 'room1'">
       <i class="bi bi-check-circle-fill empty-bi" style="color:#16A34A;"></i>
       <div class="empty-title">All clear!</div>
       <div class="empty-sub">No stock alerts right now. All items are well stocked.</div>
+    </div>
+
+        <!-- ── Room 1 Alerts ── -->
+    <div class="r1-alerts-section" v-if="(room1OutOfStock.length || room1LowStock.length) && (filter === 'all' || filter === 'room1')">
+      <div class="r1-section-title">
+        <i class="bi bi-door-open"></i>
+        Room 1 Needs Restocking
+        <span class="r1-badge">{{ room1OutOfStock.length + room1LowStock.length }} items</span>
+      </div>
+      <div class="r1-items">
+        <div class="r1-item" v-for="p in [...room1OutOfStock, ...room1LowStock.filter(i => i.room1_stock > 0)]" :key="p.id">
+          <div class="r1-item-info">
+            <div class="r1-item-name">{{ p.name }}</div>
+            <div class="r1-item-sku">{{ p.sku }}</div>
+          </div>
+          <div class="r1-stock-info">
+            <div class="r1-stock-row">
+              <span class="r1-loc"><i class="bi bi-building"></i> Warehouse</span>
+              <span class="r1-val" :class="p.stock === 0 ? 'r1-empty' : ''">{{ p.stock }} {{ p.unit }}</span>
+            </div>
+            <div class="r1-stock-row">
+              <span class="r1-loc"><i class="bi bi-door-open"></i> Room 1</span>
+              <span class="r1-val r1-empty">{{ p.room1_stock || 0 }} {{ p.unit }}</span>
+            </div>
+          </div>
+          <span class="r1-status" :class="(p.room1_stock||0) === 0 ? 'r1-s-empty' : 'r1-s-low'">
+            {{ (p.room1_stock||0) === 0 ? 'Empty' : 'Low' }}
+          </span>
+        </div>
+      </div>
     </div>
 
     <!-- ── Alert table ── -->
@@ -212,7 +266,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useInventory } from '@/composables/useInventory'
 
-const { products, totalProducts, lowStockItems, outOfStock, fetchProducts, updateProduct } = useInventory()
+const { products, totalProducts, lowStockItems, outOfStock, room1LowStock, room1OutOfStock, fetchProducts, updateProduct } = useInventory()
 
 const loading = ref(false)
 const filter  = ref('all')
@@ -220,8 +274,9 @@ const filter  = ref('all')
 const lowStock = computed(() => lowStockItems.value.filter(p => p.stock > 0))
 
 const filteredAlerts = computed(() => {
-  if (filter.value === 'out') return outOfStock.value
-  if (filter.value === 'low') return lowStock.value
+  if (filter.value === 'out')   return outOfStock.value
+  if (filter.value === 'low')   return lowStock.value
+  if (filter.value === 'room1') return []  // Room 1 has its own section below
   return [...outOfStock.value, ...lowStock.value]
 })
 
@@ -373,4 +428,29 @@ function showToast(message, type = 'success') {
 @keyframes spin   { to { transform: rotate(360deg); } }
 @media (max-width: 768px) { .summary-cards { grid-template-columns: 1fr 1fr; } .page-header { flex-direction: column; } }
 @media (max-width: 480px) { .summary-cards { grid-template-columns: 1fr; } .page-title { font-size: 22px; } }
+
+/* Room 1 alerts */
+.r1-alerts-section { background: #FFFBEB; border: 1.5px solid #FDE68A; border-radius: 14px; padding: 16px 18px; }
+.r1-section-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: #92400E; margin-bottom: 12px; }
+.r1-badge { font-size: 11px; background: #F59E0B; color: white; padding: 2px 9px; border-radius: 20px; font-weight: 700; }
+.r1-items { display: flex; flex-direction: column; gap: 8px; }
+.r1-item { display: flex; align-items: center; gap: 12px; background: white; border-radius: 10px; padding: 10px 14px; border: 1px solid #FDE68A; }
+.r1-item-info { flex: 1; }
+.r1-item-name { font-size: 13px; font-weight: 600; color: #1A1016; }
+.r1-item-sku  { font-size: 11px; color: #B01020; font-family: monospace; }
+.r1-stock-info { display: flex; flex-direction: column; gap: 3px; }
+.r1-stock-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.r1-loc { color: #9A8589; display: flex; align-items: center; gap: 4px; min-width: 90px; }
+.r1-val { font-weight: 600; color: #1A1016; }
+.r1-empty { color: #DC2626 !important; }
+.r1-status { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; flex-shrink: 0; }
+.r1-s-empty { background: #FEE2E2; color: #B91C1C; }
+.r1-s-low   { background: #FEF3C7; color: #92400E; }
+
+
+/* Room 1 filter tab */
+.ftab-room1 { display: flex; align-items: center; gap: 5px; }
+.ftab-count-r1 { background: #7C3AED !important; }
+.ftab-room1.active { background: #7C3AED !important; border-color: #7C3AED !important; color: white !important; }
+
 </style>

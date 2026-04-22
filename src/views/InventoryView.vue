@@ -56,21 +56,48 @@
 
     <!-- ── Stats row ── -->
     <div class="stats-row">
-      <div class="stat-chip">
-        <span class="stat-chip-label">Total Products</span>
-        <span class="stat-chip-val">{{ totalProducts }}</span>
+      <!-- Warehouse stats -->
+      <div class="stats-group">
+        <div class="stats-group-label">
+          <i class="bi bi-building"></i> Warehouse
+        </div>
+        <div class="stats-inner">
+          <div class="stat-chip">
+            <span class="stat-chip-label">Total Stock</span>
+            <span class="stat-chip-val">{{ totalStock.toLocaleString() }}</span>
+          </div>
+          <div class="stat-chip stat-chip-warn" v-if="lowStockItems.length">
+            <span class="stat-chip-label">Low Stock</span>
+            <span class="stat-chip-val">{{ lowStockItems.length }}</span>
+          </div>
+          <div class="stat-chip stat-chip-danger" v-if="outOfStock.length">
+            <span class="stat-chip-label">Out of Stock</span>
+            <span class="stat-chip-val">{{ outOfStock.length }}</span>
+          </div>
+        </div>
       </div>
-      <div class="stat-chip">
-        <span class="stat-chip-label">Total Stock</span>
-        <span class="stat-chip-val">{{ totalStock.toLocaleString() }}</span>
-      </div>
-      <div class="stat-chip stat-chip-warn">
-        <span class="stat-chip-label">Low Stock</span>
-        <span class="stat-chip-val">{{ lowStockItems.length }}</span>
-      </div>
-      <div class="stat-chip stat-chip-danger" v-if="outOfStock.length > 0">
-        <span class="stat-chip-label">Out of Stock</span>
-        <span class="stat-chip-val">{{ outOfStock.length }}</span>
+
+      <div class="stats-divider"></div>
+
+      <!-- Room 1 stats -->
+      <div class="stats-group">
+        <div class="stats-group-label stats-group-label-r1">
+          <i class="bi bi-door-open"></i> Room 1
+        </div>
+        <div class="stats-inner">
+          <div class="stat-chip stat-chip-r1">
+            <span class="stat-chip-label">Total Stock</span>
+            <span class="stat-chip-val">{{ totalRoom1Stock.toLocaleString() }}</span>
+          </div>
+          <div class="stat-chip stat-chip-warn" v-if="room1LowStock.length">
+            <span class="stat-chip-label">Low Stock</span>
+            <span class="stat-chip-val">{{ room1LowStock.length }}</span>
+          </div>
+          <div class="stat-chip stat-chip-danger" v-if="room1OutOfStock.length">
+            <span class="stat-chip-label">Empty</span>
+            <span class="stat-chip-val">{{ room1OutOfStock.length }}</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -96,9 +123,17 @@
             <th>Product</th>
             <th>SKU</th>
             <th>Category</th>
-            <th>Stock</th>
+            <th>
+              <div class="th-loc">
+                <i class="bi bi-building"></i> Warehouse
+              </div>
+            </th>
+            <th>
+              <div class="th-loc th-loc-room1">
+                <i class="bi bi-door-open"></i> Room 1
+              </div>
+            </th>
             <th>Unit Price</th>
-            <th>Value</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
@@ -115,6 +150,7 @@
             </td>
             <td><span class="sku-badge">{{ product.sku }}</span></td>
             <td><span class="cat-badge">{{ product.category }}</span></td>
+            <!-- Warehouse stock -->
             <td>
               <div class="stock-cell">
                 <span class="stock-num" :class="{ 'stock-low': product.stock <= product.reorder_at, 'stock-out': product.stock === 0 }">
@@ -122,13 +158,37 @@
                 </span>
                 <span class="stock-unit">{{ product.unit }}</span>
               </div>
+              <div class="reorder-hint" v-if="product.stock <= product.reorder_at && product.stock > 0">reorder at {{ product.reorder_at }}</div>
             </td>
-            <td class="price-cell">₱{{ Number(product.price).toLocaleString() }}</td>
-            <td class="price-cell">₱{{ (product.stock * product.price).toLocaleString() }}</td>
+
+            <!-- Room 1 stock -->
             <td>
-              <span class="status-badge" :class="stockStatus(product).cls">
-                {{ stockStatus(product).label }}
-              </span>
+              <div class="room1-cell">
+                <div class="stock-cell">
+                  <span class="stock-num room1-num" :class="{ 'stock-low': (product.room1_stock||0) <= (product.room1_reorder_at??2) && (product.room1_stock||0) > 0, 'stock-out': (product.room1_stock||0) === 0 }">
+                    {{ product.room1_stock || 0 }}
+                  </span>
+                  <span class="stock-unit">{{ product.unit }}</span>
+                </div>
+                <button class="btn-transfer" @click.stop="openTransfer(product)" title="Transfer stock">
+                  <i class="bi bi-arrow-left-right"></i>
+                </button>
+              </div>
+              <div class="reorder-hint room1-hint" v-if="(product.room1_stock||0) <= (product.room1_reorder_at??2)">
+                {{ (product.room1_stock||0) === 0 ? 'Empty — restock!' : `low — restock from warehouse` }}
+              </div>
+            </td>
+
+            <td class="price-cell">₱{{ Number(product.price).toLocaleString() }}</td>
+            <td>
+              <div class="status-col">
+                <span class="status-badge" :class="stockStatus(product).cls">
+                  {{ stockStatus(product).label }}
+                </span>
+                <span class="status-badge room1-badge" :class="room1Status(product).cls" title="Room 1">
+                  <i class="bi bi-door-open" style="font-size:9px;"></i> {{ room1Status(product).label }}
+                </span>
+              </div>
             </td>
             <td>
               <div class="action-btns">
@@ -220,9 +280,26 @@
                 <div class="form-error" v-if="errors.price">{{ errors.price }}</div>
               </div>
               <div class="form-field">
-                <label class="form-label">Reorder At</label>
+                <label class="form-label">Warehouse Reorder At</label>
                 <input class="form-input" type="number" v-model.number="form.reorder_at" placeholder="10" min="0" />
-                <div class="form-hint">Alert when stock drops to this level</div>
+                <div class="form-hint">Alert when warehouse stock drops here</div>
+              </div>
+            </div>
+
+            <!-- Room 1 stock row -->
+            <div class="form-section-divider">
+              <i class="bi bi-door-open"></i> Room 1 Settings
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label class="form-label">Room 1 Stock</label>
+                <input class="form-input" type="number" v-model.number="form.room1_stock" placeholder="0" min="0" />
+                <div class="form-hint">Current display stock in Room 1</div>
+              </div>
+              <div class="form-field">
+                <label class="form-label">Room 1 Reorder At</label>
+                <input class="form-input" type="number" v-model.number="form.room1_reorder_at" placeholder="1" min="0" />
+                <div class="form-hint">Alert when Room 1 drops to this (e.g. 1 box)</div>
               </div>
             </div>
 
@@ -270,6 +347,104 @@
     <Teleport to="body"><Transition name="toast">
       <div class="toast" v-if="toast.show" :class="'toast-' + toast.type">
         {{ toast.message }}
+      </div>
+    </Transition></Teleport>
+
+    <!-- ══ TRANSFER MODAL ══ -->
+    <Teleport to="body"><Transition name="modal-fade">
+      <div class="modal-overlay" v-if="showTransfer" @click.self="closeTransfer">
+        <div class="modal">
+          <div class="modal-header">
+            <div class="modal-title">
+              <i class="bi bi-arrow-left-right" style="color:#B01020;margin-right:6px;"></i>
+              Transfer Stock
+            </div>
+            <button class="modal-close" @click="closeTransfer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="modal-body" v-if="transferProduct">
+
+            <!-- Product info -->
+            <div class="transfer-product-info">
+              <div class="tpi-name">{{ transferProduct.name }}</div>
+              <div class="tpi-sku">{{ transferProduct.sku }}</div>
+            </div>
+
+            <!-- Stock levels -->
+            <div class="transfer-stocks">
+              <div class="ts-loc" :class="{ 'ts-active': transferDir === 'toRoom1' }">
+                <div class="ts-icon"><i class="bi bi-building"></i></div>
+                <div class="ts-label">Warehouse</div>
+                <div class="ts-val" :class="{ 'stock-low': transferProduct.stock <= transferProduct.reorder_at }">
+                  {{ transferProduct.stock }} {{ transferProduct.unit }}
+                </div>
+              </div>
+              <div class="ts-arrow" @click="transferDir = transferDir === 'toRoom1' ? 'toWarehouse' : 'toRoom1'">
+                <i :class="transferDir === 'toRoom1' ? 'bi bi-arrow-right-circle-fill' : 'bi bi-arrow-left-circle-fill'"></i>
+                <div class="ts-arrow-label">click to flip</div>
+              </div>
+              <div class="ts-loc" :class="{ 'ts-active': transferDir === 'toWarehouse' }">
+                <div class="ts-icon"><i class="bi bi-door-open"></i></div>
+                <div class="ts-label">Room 1</div>
+                <div class="ts-val" :class="{ 'stock-low': (transferProduct.room1_stock||0) <= (transferProduct.room1_reorder_at??2) }">
+                  {{ transferProduct.room1_stock || 0 }} {{ transferProduct.unit }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Direction label -->
+            <div class="transfer-direction">
+              <span v-if="transferDir === 'toRoom1'">
+                Moving from <strong>Warehouse → Room 1</strong>
+              </span>
+              <span v-else>
+                Moving from <strong>Room 1 → Warehouse</strong>
+              </span>
+            </div>
+
+            <!-- Qty input -->
+            <div class="form-field">
+              <label class="form-label">Quantity to Transfer <span class="req">*</span></label>
+              <div class="qty-row">
+                <button class="qty-btn" @click="transferQty = Math.max(1, transferQty - 1)">−</button>
+                <input class="form-input qty-input" type="number" v-model.number="transferQty" min="1"
+                  :max="transferDir === 'toRoom1' ? transferProduct.stock : (transferProduct.room1_stock||0)" />
+                <button class="qty-btn" @click="transferQty++">+</button>
+              </div>
+              <div class="transfer-preview" v-if="transferQty > 0">
+                <template v-if="transferDir === 'toRoom1'">
+                  Warehouse: {{ transferProduct.stock }} → <strong>{{ transferProduct.stock - transferQty }}</strong>
+                  &nbsp;|&nbsp;
+                  Room 1: {{ transferProduct.room1_stock || 0 }} → <strong>{{ (transferProduct.room1_stock||0) + transferQty }}</strong>
+                </template>
+                <template v-else>
+                  Room 1: {{ transferProduct.room1_stock||0 }} → <strong>{{ (transferProduct.room1_stock||0) - transferQty }}</strong>
+                  &nbsp;|&nbsp;
+                  Warehouse: {{ transferProduct.stock }} → <strong>{{ transferProduct.stock + transferQty }}</strong>
+                </template>
+              </div>
+              <div class="form-error" v-if="transferError">{{ transferError }}</div>
+            </div>
+
+            <!-- Notes -->
+            <div class="form-field">
+              <label class="form-label">Notes (optional)</label>
+              <input class="form-input" v-model="transferNotes" placeholder="Reason for transfer…" maxlength="100" />
+            </div>
+
+          </div>
+          <div class="modal-footer">
+            <button class="btn-cancel" @click="closeTransfer" :disabled="transferring">Cancel</button>
+            <button class="btn-save" @click="doTransfer" :disabled="transferring || transferQty < 1">
+              <div class="spinner-sm" v-if="transferring"></div>
+              <span v-else>
+                <i class="bi bi-arrow-left-right"></i>
+                Transfer {{ transferQty }} {{ transferProduct?.unit }}
+              </span>
+            </button>
+          </div>
+        </div>
       </div>
     </Transition></Teleport>
 
@@ -457,18 +632,26 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useInventory } from '@/composables/useInventory'
+import { getProfile }   from '@/composables/useAuth'
 
 const {
   products, categories, loading,
-  totalProducts, totalStock, lowStockItems, outOfStock,
-  stockStatus,
+  totalProducts, totalStock, totalRoom1Stock,
+  lowStockItems, outOfStock,
+  room1LowStock, room1OutOfStock,
+  stockStatus, room1Status,
   fetchProducts, fetchCategories,
   addProduct, updateProduct, deleteProduct,
   subscribeRealtime, unsubscribeRealtime,
+  transferToRoom1, transferFromRoom1,
 } = useInventory()
+
+// ── Profile ───────────────────────────────────
+const currentProfile = ref(null)
 
 // ── Fetch on mount ────────────────────────────
 onMounted(async () => {
+  currentProfile.value = await getProfile()
   await Promise.all([fetchProducts(), fetchCategories()])
   subscribeRealtime()
 })
@@ -504,13 +687,15 @@ const saving    = ref(false)
 const errors    = ref({})
 
 const emptyForm = () => ({
-  name:      '',
-  sku:       '',
-  category:  '',
-  stock:     0,
-  unit:      'pcs',
-  price:     0,
-  reorder_at: 10,
+  name:             '',
+  sku:              '',
+  category:         '',
+  stock:            0,
+  unit:             'pcs',
+  price:            0,
+  reorder_at:       10,
+  room1_stock:      0,
+  room1_reorder_at: 1,
 })
 const form = ref(emptyForm())
 
@@ -519,13 +704,15 @@ function openModal(product = null) {
   if (product) {
     editing.value = product.id
     form.value = {
-      name:       product.name,
-      sku:        product.sku,
-      category:   product.category,
-      stock:      product.stock,
-      unit:       product.unit,
-      price:      product.price,
-      reorder_at: product.reorder_at,
+      name:             product.name,
+      sku:              product.sku,
+      category:         product.category,
+      stock:            product.stock,
+      unit:             product.unit,
+      price:            product.price,
+      reorder_at:       product.reorder_at,
+      room1_stock:      product.room1_stock      || 0,
+      room1_reorder_at: product.room1_reorder_at ?? 1,
     }
   } else {
     editing.value = null
@@ -583,6 +770,55 @@ async function doDelete() {
     showToast('Error: ' + err.message, 'error')
   } finally {
     deleteTarget.value = null
+  }
+}
+
+
+// -- Transfer Modal ---
+const showTransfer    = ref(false)
+const transferProduct = ref(null)
+const transferDir     = ref("toRoom1")
+const transferQty     = ref(1)
+const transferNotes   = ref("")
+const transferError   = ref("")
+const transferring    = ref(false)
+async function openTransfer(product) {
+  if (!currentProfile.value) currentProfile.value = await getProfile()
+  transferProduct.value = product
+  transferDir.value     = "toRoom1"
+  transferQty.value     = 1
+  transferNotes.value   = ""
+  transferError.value   = ""
+  showTransfer.value    = true
+}
+
+function closeTransfer() {
+  showTransfer.value    = false
+  transferProduct.value = null
+}
+
+async function doTransfer() {
+  const p   = transferProduct.value
+  const qty = transferQty.value
+  if (!p || qty < 1) return
+  transferError.value = ""
+  transferring.value  = true
+  try {
+    const userName = currentProfile.value?.name || currentProfile.value?.email || "Unknown"
+    if (transferDir.value === "toRoom1") {
+      if (qty > p.stock) { transferError.value = `Only ${p.stock} ${p.unit} available in Warehouse`; transferring.value = false; return }
+      await transferToRoom1(p, qty, transferNotes.value, userName)
+      showToast(`${qty} ${p.unit} of "${p.name}" transferred to Room 1`, "success")
+    } else {
+      if (qty > (p.room1_stock || 0)) { transferError.value = `Only ${p.room1_stock || 0} ${p.unit} available in Room 1`; transferring.value = false; return }
+      await transferFromRoom1(p, qty, transferNotes.value, userName)
+      showToast(`${qty} ${p.unit} of "${p.name}" returned to Warehouse`, "success")
+    }
+    closeTransfer()
+  } catch (err) {
+    transferError.value = err.message
+  } finally {
+    transferring.value = false
   }
 }
 
@@ -937,6 +1173,7 @@ function showToast(message, type = 'success') {
   toast.value = { show: true, message, type }
   toastTimer = setTimeout(() => { toast.value.show = false }, 3000)
 }
+
 </script>
 
 
@@ -1345,4 +1582,66 @@ function showToast(message, type = 'success') {
   .stats-row { grid-template-columns: 1fr; }
   .page-title { font-size: 22px; }
 }
+
+/* ── Room 1 table styles ── */
+.th-loc { display: flex; align-items: center; gap: 5px; font-size: 10px; }
+.th-loc-room1 { color: #7C3AED; }
+.room1-cell { display: flex; align-items: center; gap: 6px; }
+.room1-num { color: #7C3AED !important; }
+.reorder-hint { font-size: 9px; color: #D97706; margin-top: 2px; }
+.room1-hint   { color: #DC2626; }
+.status-col   { display: flex; flex-direction: column; gap: 3px; }
+.room1-badge  { font-size: 9px !important; padding: 2px 6px !important; }
+.btn-transfer {
+  width: 24px; height: 24px; border-radius: 6px;
+  border: 1.5px solid #EDE3E5; background: white;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  color: #7C3AED; font-size: 11px; flex-shrink: 0;
+  transition: all 0.15s;
+}
+.btn-transfer:hover { background: #F5F3FF; border-color: #7C3AED; }
+
+/* ── Stats row groups ── */
+.stats-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.stats-group { display: flex; flex-direction: column; gap: 6px; }
+.stats-group-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #6B5257; display: flex; align-items: center; gap: 5px; }
+.stats-group-label-r1 { color: #7C3AED; }
+.stats-inner { display: flex; gap: 6px; flex-wrap: wrap; }
+.stats-divider { width: 1px; background: #EDE3E5; align-self: stretch; margin: 0 4px; }
+.stat-chip-r1 { background: #F5F3FF !important; border-color: #DDD6FE !important; }
+.stat-chip-r1 .stat-chip-val { color: #7C3AED !important; }
+
+/* ── Transfer modal ── */
+.transfer-product-info { background: #F7F3F4; border-radius: 10px; padding: 12px 14px; }
+.tpi-name { font-family: "Cormorant Garamond", serif; font-size: 18px; font-weight: 600; color: #1A1016; }
+.tpi-sku  { font-size: 11px; color: #B01020; font-family: monospace; font-weight: 700; }
+.transfer-stocks { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; padding: 14px 0; }
+.ts-loc { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px; background: #F7F3F4; border-radius: 12px; border: 2px solid #EDE3E5; transition: all 0.2s; }
+.ts-loc.ts-active { border-color: #B01020; background: #FFF5F6; }
+.ts-icon { font-size: 22px; color: #9A8589; }
+.ts-active .ts-icon { color: #B01020; }
+.ts-label { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #9A8589; }
+.ts-active .ts-label { color: #B01020; }
+.ts-val { font-size: 18px; font-weight: 700; color: #1A1016; font-family: "Cormorant Garamond", serif; }
+.ts-arrow { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; color: #B01020; font-size: 24px; transition: transform 0.2s; }
+.ts-arrow:hover { transform: scale(1.15); }
+.ts-arrow-label { font-size: 9px; color: #9A8589; text-transform: uppercase; letter-spacing: 0.5px; }
+.transfer-direction { text-align: center; font-size: 13px; color: #6B5257; padding: 4px 0; }
+.transfer-preview { font-size: 12px; color: #6B5257; margin-top: 6px; background: #F7F3F4; padding: 8px 12px; border-radius: 8px; }
+.transfer-preview strong { color: #1A1016; font-weight: 700; }
+.qty-row { display: flex; align-items: center; gap: 8px; }
+.qty-btn { width: 34px; height: 34px; border-radius: 8px; border: 1.5px solid #EDE3E5; background: white; font-size: 18px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #3D2830; transition: all 0.15s; flex-shrink: 0; }
+.qty-btn:hover { border-color: #B01020; color: #B01020; }
+.qty-input { width: 70px; text-align: center; flex-shrink: 0; }
+
+
+.form-section-divider {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: #7C3AED;
+  padding: 6px 0 2px;
+  border-top: 1px solid #EDE3E5;
+  margin-top: 2px;
+}
+
 </style>

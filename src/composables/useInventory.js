@@ -14,17 +14,28 @@ const loading    = ref(false)
 const error      = ref(null)
 
 // ── Computed Stats ────────────────────────────
-const totalProducts = computed(() => products.value.length)
-const totalStock    = computed(() => products.value.reduce((s, p) => s + (p.stock || 0), 0))
-const totalValue    = computed(() => products.value.reduce((s, p) => s + (p.stock || 0) * (p.price || 0), 0))
-const lowStockItems = computed(() => products.value.filter(p => p.stock <= p.reorder_at))
-const outOfStock    = computed(() => products.value.filter(p => p.stock === 0))
+const totalProducts    = computed(() => products.value.length)
+const totalStock       = computed(() => products.value.reduce((s, p) => s + (p.stock || 0), 0))
+const totalValue       = computed(() => products.value.reduce((s, p) => s + (p.stock || 0) * (p.price || 0), 0))
+const totalRoom1Stock  = computed(() => products.value.reduce((s, p) => s + (p.room1_stock || 0), 0))
+const lowStockItems    = computed(() => products.value.filter(p => p.stock <= p.reorder_at))
+const outOfStock       = computed(() => products.value.filter(p => p.stock === 0))
+const room1LowStock    = computed(() => products.value.filter(p => (p.room1_stock || 0) <= (p.room1_reorder_at ?? 2) && (p.room1_stock || 0) > 0))
+const room1OutOfStock  = computed(() => products.value.filter(p => (p.room1_stock || 0) === 0))
 
 // ── Helpers ───────────────────────────────────
 function stockStatus(product) {
   if (product.stock === 0)                  return { label: 'Out of Stock', cls: 'status-out' }
   if (product.stock <= product.reorder_at)  return { label: 'Low Stock',    cls: 'status-low' }
   return                                           { label: 'In Stock',     cls: 'status-ok'  }
+}
+
+function room1Status(product) {
+  const s = product.room1_stock || 0
+  const r = product.room1_reorder_at ?? 2
+  if (s === 0)   return { label: 'Empty',    cls: 'status-out' }
+  if (s <= r)    return { label: 'Low',      cls: 'status-low' }
+  return               { label: 'Stocked',  cls: 'status-ok'  }
 }
 
 // ── Products CRUD ─────────────────────────────
@@ -164,15 +175,119 @@ function unsubscribeRealtime() {
   if (categorySub) supabase.removeChannel(categorySub)
 }
 
+// ── Room 1 Stock Operations ───────────────────
+
+async function updateRoom1Stock(id, room1_stock) {
+  const { data, error: err } = await supabase
+    .from('products')
+    .update({ room1_stock })
+    .eq('id', id)
+    .select()
+    .single()
+  if (err) throw err
+  const i = products.value.findIndex(p => p.id === id)
+  if (i !== -1) products.value[i] = data
+  logActivity({
+    action:     'stock.room1_update',
+    entityType: 'product',
+    entityId:   id,
+    entityName: data.name,
+    details:    { room1_stock },
+  })
+  return data
+}
+
+async function transferToRoom1(product, qty, notes, userName) {
+  if (qty <= 0) throw new Error('Quantity must be greater than 0')
+  if (qty > product.stock) throw new Error('Not enough warehouse stock')
+
+  const newWarehouse = product.stock - qty
+  const newRoom1     = (product.room1_stock || 0) + qty
+
+  // Update both stock values atomically
+  const { data, error: err } = await supabase
+    .from('products')
+    .update({ stock: newWarehouse, room1_stock: newRoom1 })
+    .eq('id', product.id)
+    .select()
+    .single()
+  if (err) throw err
+
+  const i = products.value.findIndex(p => p.id === product.id)
+  if (i !== -1) products.value[i] = data
+
+  // Record transfer
+  await supabase.from('stock_transfers').insert([{
+    product_id:          product.id,
+    product_name:        product.name,
+    quantity:            qty,
+    from_location:       'warehouse',
+    to_location:         'room1',
+    notes:               notes || null,
+    transferred_by_name: userName || 'Unknown',
+  }])
+
+  logActivity({
+    action:     'stock.transfer',
+    entityType: 'stock',
+    entityId:   product.id,
+    entityName: product.name,
+    details:    { qty, from: 'warehouse', to: 'room1', warehouse_after: newWarehouse, room1_after: newRoom1 },
+  })
+
+  return data
+}
+
+async function transferFromRoom1(product, qty, notes, userName) {
+  if (qty <= 0) throw new Error('Quantity must be greater than 0')
+  if (qty > (product.room1_stock || 0)) throw new Error('Not enough Room 1 stock')
+
+  const newWarehouse = product.stock + qty
+  const newRoom1     = (product.room1_stock || 0) - qty
+
+  const { data, error: err } = await supabase
+    .from('products')
+    .update({ stock: newWarehouse, room1_stock: newRoom1 })
+    .eq('id', product.id)
+    .select()
+    .single()
+  if (err) throw err
+
+  const i = products.value.findIndex(p => p.id === product.id)
+  if (i !== -1) products.value[i] = data
+
+  await supabase.from('stock_transfers').insert([{
+    product_id:          product.id,
+    product_name:        product.name,
+    quantity:            qty,
+    from_location:       'room1',
+    to_location:         'warehouse',
+    notes:               notes || null,
+    transferred_by_name: userName || 'Unknown',
+  }])
+
+  logActivity({
+    action:     'stock.transfer',
+    entityType: 'stock',
+    entityId:   product.id,
+    entityName: product.name,
+    details:    { qty, from: 'room1', to: 'warehouse', warehouse_after: newWarehouse, room1_after: newRoom1 },
+  })
+
+  return data
+}
+
 // ── Export ────────────────────────────────────
 export function useInventory() {
   return {
     products, categories, loading, error,
-    totalProducts, totalStock, totalValue,
+    totalProducts, totalStock, totalValue, totalRoom1Stock,
     lowStockItems, outOfStock,
-    stockStatus,
+    room1LowStock, room1OutOfStock,
+    stockStatus, room1Status,
     fetchProducts, addProduct, updateProduct, deleteProduct,
     fetchCategories, addCategory, updateCategory, deleteCategory,
     subscribeRealtime, unsubscribeRealtime,
+    updateRoom1Stock, transferToRoom1, transferFromRoom1,
   }
 }
