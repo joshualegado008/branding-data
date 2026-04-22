@@ -62,10 +62,56 @@
             <div class="form-hint">Role is set in User Management.</div>
           </div>
 
+          <div class="section-divider">
+            <span>Change Password</span>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label">New Password</label>
+            <div class="pw-wrap">
+              <input
+                class="form-input"
+                :class="{ 'input-error': pwErrors.newPassword }"
+                v-model="pwForm.newPassword"
+                :type="showNewPw ? 'text' : 'password'"
+                placeholder="Enter new password"
+                @input="pwErrors.newPassword = ''"
+              />
+              <button class="pw-toggle" type="button" @click="showNewPw = !showNewPw" tabindex="-1">
+                <svg v-if="!showNewPw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+            <div class="field-error" v-if="pwErrors.newPassword">{{ pwErrors.newPassword }}</div>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label">Confirm New Password</label>
+            <div class="pw-wrap">
+              <input
+                class="form-input"
+                :class="{ 'input-error': pwErrors.confirmPassword }"
+                v-model="pwForm.confirmPassword"
+                :type="showConfirmPw ? 'text' : 'password'"
+                placeholder="Re-enter new password"
+                @input="pwErrors.confirmPassword = ''"
+              />
+              <button class="pw-toggle" type="button" @click="showConfirmPw = !showConfirmPw" tabindex="-1">
+                <svg v-if="!showConfirmPw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+            <div class="field-error" v-if="pwErrors.confirmPassword">{{ pwErrors.confirmPassword }}</div>
+          </div>
+
           <div class="panel-footer">
             <button class="btn-save" @click="saveProfile" :disabled="saving || !profileForm.name.trim()">
               <div class="spinner-sm" v-if="saving"></div>
               <span v-else>Save Name</span>
+            </button>
+            <button class="btn-save btn-change-pw" @click="changePassword" :disabled="changingPw || !pwForm.newPassword">
+              <div class="spinner-sm" v-if="changingPw"></div>
+              <span v-else>Update Password</span>
             </button>
           </div>
         </div>
@@ -238,8 +284,16 @@
 
         <!-- ══ USER MANAGEMENT (ADMIN ONLY) ══ -->
         <div class="settings-panel" v-if="activeSection === 'users'">
-          <div class="panel-title">User Accounts</div>
-          <div class="panel-sub">View and manage staff and admin accounts</div>
+          <div class="panel-title-row">
+            <div>
+              <div class="panel-title">User Accounts</div>
+              <div class="panel-sub">View and manage staff and admin accounts</div>
+            </div>
+            <button class="btn-add-user" @click="showCreateUser = true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add User
+            </button>
+          </div>
 
           <div class="loading-state" v-if="usersLoading">
             <div class="spinner"></div> Loading users…
@@ -266,12 +320,79 @@
             </div>
             <div class="users-empty" v-if="users.length === 0">No users found.</div>
           </div>
-
-          <div class="access-info-box" style="margin-top:4px">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" width="16" height="16"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <span>To add or delete users, go to your <strong>Supabase Dashboard → Authentication → Users</strong>.</span>
-          </div>
         </div>
+
+        <!-- ══ CREATE USER MODAL ══ -->
+        <Teleport to="body">
+          <Transition name="modal-fade">
+            <div class="su-overlay" v-if="showCreateUser" @click.self="closeCreateUser">
+              <div class="su-modal">
+                <div class="su-header">
+                  <div class="su-title">Create New Account</div>
+                  <button class="su-close" @click="closeCreateUser">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+
+                <div class="su-body">
+                  <!-- Success -->
+                  <div v-if="createSuccess" class="cu-success">
+                    <div class="cu-success-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" width="32" height="32"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    </div>
+                    <div class="cu-success-title">Account Created!</div>
+                    <div class="cu-success-msg">
+                      <strong>{{ createForm.name }}</strong> has been added as <strong>{{ createForm.role }}</strong>.
+                    </div>
+                    <button class="su-btn-save" style="margin-top:16px;width:100%" @click="closeCreateUser">Done</button>
+                  </div>
+
+                  <!-- Form -->
+                  <template v-else>
+                    <div class="su-field">
+                      <label class="su-label">Full Name <span class="su-req">*</span></label>
+                      <input class="su-input" :class="{ 'su-input-err': createErrors.name }" v-model="createForm.name" placeholder="e.g. Juan dela Cruz" maxlength="60" @input="createErrors.name = ''" />
+                      <div class="su-err" v-if="createErrors.name">{{ createErrors.name }}</div>
+                    </div>
+                    <div class="su-field">
+                      <label class="su-label">Email Address <span class="su-req">*</span></label>
+                      <input class="su-input" :class="{ 'su-input-err': createErrors.email }" v-model="createForm.email" type="email" placeholder="e.g. juan@example.com" @input="createErrors.email = ''" />
+                      <div class="su-err" v-if="createErrors.email">{{ createErrors.email }}</div>
+                    </div>
+                    <div class="su-field">
+                      <label class="su-label">Password <span class="su-req">*</span></label>
+                      <div class="su-pw-wrap">
+                        <input class="su-input" :class="{ 'su-input-err': createErrors.password }" v-model="createForm.password" :type="showCreatePw ? 'text' : 'password'" placeholder="Minimum 6 characters" @input="createErrors.password = ''" />
+                        <button class="su-pw-toggle" type="button" @click="showCreatePw = !showCreatePw" tabindex="-1">
+                          <svg v-if="!showCreatePw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        </button>
+                      </div>
+                      <div class="su-err" v-if="createErrors.password">{{ createErrors.password }}</div>
+                    </div>
+                    <div class="su-field">
+                      <label class="su-label">Role <span class="su-req">*</span></label>
+                      <select class="su-input su-select" v-model="createForm.role">
+                        <option value="Staff">Staff</option>
+                        <option value="Viewer">Viewer</option>
+                        <option value="Administrator">Administrator</option>
+                      </select>
+                    </div>
+                    <div class="su-err su-global-err" v-if="createErrors.global">{{ createErrors.global }}</div>
+                  </template>
+                </div>
+
+                <div class="su-footer" v-if="!createSuccess">
+                  <button class="su-btn-cancel" @click="closeCreateUser" :disabled="createLoading">Cancel</button>
+                  <button class="su-btn-save" @click="createUser" :disabled="createLoading">
+                    <svg v-if="createLoading" class="su-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+                    {{ createLoading ? 'Creating...' : 'Create Account' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Transition>
+        </Teleport>
 
         <!-- ══ ABOUT ══ -->
         <div class="settings-panel" v-if="activeSection === 'about'">
@@ -320,6 +441,35 @@ import { getProfile } from '@/composables/useAuth'
 const profile     = ref({ id: '', name: '', role: '', email: '' })
 const profileForm = ref({ name: '' })
 const saving      = ref(false)
+
+// ── Change password ───────────────────────────
+const pwForm         = ref({ newPassword: '', confirmPassword: '' })
+const pwErrors       = ref({ newPassword: '', confirmPassword: '' })
+const changingPw     = ref(false)
+const showNewPw      = ref(false)
+const showConfirmPw  = ref(false)
+
+async function changePassword() {
+  pwErrors.value = { newPassword: '', confirmPassword: '' }
+  let valid = true
+  if (!pwForm.value.newPassword)              { pwErrors.value.newPassword = 'New password is required'; valid = false }
+  else if (pwForm.value.newPassword.length < 6) { pwErrors.value.newPassword = 'At least 6 characters'; valid = false }
+  if (pwForm.value.newPassword !== pwForm.value.confirmPassword) { pwErrors.value.confirmPassword = 'Passwords do not match'; valid = false }
+  if (!valid) return
+
+  changingPw.value = true
+  const { error } = await supabase.auth.updateUser({ password: pwForm.value.newPassword })
+  changingPw.value = false
+
+  if (error) {
+    pwErrors.value.newPassword = error.message
+  } else {
+    pwForm.value = { newPassword: '', confirmPassword: '' }
+    showNewPw.value     = false
+    showConfirmPw.value = false
+    showToast('Password updated successfully!', 'success')
+  }
+}
 
 const isAdmin = computed(() => profile.value.role === 'Administrator')
 
@@ -419,12 +569,76 @@ function saveAccess() {
 const users        = ref([])
 const usersLoading = ref(false)
 
+// Create user modal state
+const showCreateUser = ref(false)
+const createForm     = ref({ name: '', email: '', password: '', role: 'Staff' })
+const createErrors   = ref({ name: '', email: '', password: '', global: '' })
+const createLoading  = ref(false)
+const createSuccess  = ref(false)
+const showCreatePw   = ref(false)
+
+function closeCreateUser() {
+  showCreateUser.value = false
+  createSuccess.value  = false
+  showCreatePw.value   = false
+  createForm.value     = { name: '', email: '', password: '', role: 'Staff' }
+  createErrors.value   = { name: '', email: '', password: '', global: '' }
+}
+
+async function createUser() {
+  createErrors.value = { name: '', email: '', password: '', global: '' }
+  let valid = true
+  if (!createForm.value.name.trim())     { createErrors.value.name = 'Full name is required'; valid = false }
+  if (!createForm.value.email.trim())    { createErrors.value.email = 'Email is required'; valid = false }
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(createForm.value.email)) { createErrors.value.email = 'Enter a valid email'; valid = false }
+  if (!createForm.value.password)        { createErrors.value.password = 'Password is required'; valid = false }
+  else if (createForm.value.password.length < 6) { createErrors.value.password = 'At least 6 characters'; valid = false }
+  if (!valid) return
+
+  createLoading.value = true
+
+  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+    email:    createForm.value.email.trim(),
+    password: createForm.value.password,
+    options:  { data: { name: createForm.value.name.trim() } },
+  })
+
+  if (signUpError) {
+    createErrors.value.global = signUpError.message
+    createLoading.value = false
+    return
+  }
+
+  const newId = signUpData?.user?.id
+  if (!newId) {
+    createErrors.value.global = 'Account created but user ID missing. Check Supabase.'
+    createLoading.value = false
+    return
+  }
+
+  const { error: profileError } = await supabase.from('profiles').upsert({
+    id:   newId,
+    name: createForm.value.name.trim(),
+    role: createForm.value.role,
+  })
+
+  if (profileError) {
+    createErrors.value.global = 'Auth created but profile failed: ' + profileError.message
+    createLoading.value = false
+    return
+  }
+
+  createLoading.value = false
+  createSuccess.value = true
+  await loadUsers()
+}
+
 async function loadUsers() {
   usersLoading.value = true
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, name, role, email')
+      .select('id, name, role')
       .order('name')
     if (error) throw error
     users.value = data || []
@@ -482,8 +696,19 @@ function showToast(msg, type = 'success') {
 
 /* Panel */
 .settings-panel { background: white; border: 1.5px solid #EDE3E5; border-radius: 16px; padding: 28px; display: flex; flex-direction: column; gap: 18px; }
-.panel-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 600; color: #1A1016; }
-.panel-sub { font-size: 13px; color: #9A8589; margin-top: -12px; }
+.panel-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 600; color: #1A1016; line-height: 1.2; margin-bottom: 4px; }
+.panel-sub { font-size: 12.5px; color: #9A8589; line-height: 1.4; }
+.section-divider { display: flex; align-items: center; gap: 10px; color: #9A8589; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin: 4px 0; }
+.section-divider::before, .section-divider::after { content: ''; flex: 1; height: 1px; background: #EDE3E5; }
+.pw-wrap { position: relative; }
+.pw-wrap .form-input { padding-right: 40px; }
+.pw-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #888; padding: 4px; display: flex; align-items: center; }
+.pw-toggle:hover { color: #333; }
+.input-error { border-color: #B01020 !important; background: #fff5f5 !important; }
+.field-error { color: #B01020; font-size: 11.5px; font-weight: 500; margin-top: 2px; }
+.btn-change-pw { background: #1A1016; }
+.btn-change-pw:hover:not(:disabled) { background: #3a2030; }
+.panel-footer { display: flex; gap: 10px; flex-wrap: wrap; }
 .panel-footer { display: flex; justify-content: flex-end; padding-top: 6px; border-top: 1px solid #EDE3E5; }
 
 /* Avatar */
@@ -538,6 +763,42 @@ function showToast(msg, type = 'success') {
 .role-select:disabled { background: #F7F3F4; color: #9A8589; cursor: not-allowed; }
 .you-badge { font-size: 10px; font-weight: 700; background: #FFF5F6; color: #B01020; padding: 2px 8px; border-radius: 20px; border: 1px solid #FECDD3; white-space: nowrap; }
 .users-empty { font-size: 13px; color: #9A8589; padding: 20px; text-align: center; }
+.panel-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.panel-title-row > div { min-width: 0; }
+.btn-add-user { display: flex; align-items: center; gap: 6px; padding: 8px 16px; background: #B01020; color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
+.btn-add-user:hover { background: #7A0A17; }
+.su-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(26,16,22,0.5); display: flex; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(4px); }
+.su-modal { background: white; border-radius: 18px; width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.18); }
+.su-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 22px 0; }
+.su-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 600; color: #1A1016; }
+.su-close { background: none; border: none; cursor: pointer; color: #888; padding: 4px; display: flex; align-items: center; }
+.su-close:hover { color: #333; }
+.su-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+.su-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 0 22px 20px; }
+.su-field { display: flex; flex-direction: column; gap: 5px; }
+.su-label { font-size: 12.5px; font-weight: 600; color: #333; }
+.su-req { color: #B01020; }
+.su-input { padding: 9px 12px; border: 1.5px solid #E8DDE0; border-radius: 10px; font-size: 13.5px; outline: none; width: 100%; box-sizing: border-box; transition: border 0.15s; }
+.su-input:focus { border-color: #B01020; }
+.su-input-err { border-color: #B01020 !important; background: #fff5f5 !important; }
+.su-select { appearance: auto; }
+.su-err { color: #B01020; font-size: 11.5px; font-weight: 500; }
+.su-global-err { padding: 10px 12px; background: #fff5f5; border-radius: 8px; border: 1px solid #fecaca; }
+.su-pw-wrap { position: relative; }
+.su-pw-wrap .su-input { padding-right: 40px; }
+.su-pw-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #888; padding: 4px; display: flex; align-items: center; }
+.su-btn-cancel { padding: 9px 18px; background: #F5F0F1; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; color: #555; }
+.su-btn-save { display: flex; align-items: center; gap: 6px; padding: 9px 18px; background: #B01020; color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+.su-btn-save:hover:not(:disabled) { background: #7A0A17; }
+.su-btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+.cu-success { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 20px 0 8px; gap: 10px; }
+.cu-success-icon { width: 64px; height: 64px; background: #f0fdf4; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.cu-success-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 700; color: #1A1016; }
+.cu-success-msg { color: #555; font-size: 13.5px; line-height: 1.6; }
+@keyframes su-spin { to { transform: rotate(360deg); } }
+.su-spin { animation: su-spin 0.8s linear infinite; }
+.modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.2s; }
+.modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
 
 /* About */
 .about-card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px; background: #FFF5F6; border: 1.5px solid #F0DADE; border-radius: 14px; text-align: center; }

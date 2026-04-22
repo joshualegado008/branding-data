@@ -182,63 +182,103 @@
       </div>
     </div>
 
-    <!-- ══ INVITE / ADD USER MODAL ══ -->
+    <!-- ══ ADD USER MODAL ══ -->
     <Teleport to="body">
       <Transition name="modal-fade">
-        <div class="modal-overlay" v-if="showInvite" @click.self="showInvite = false">
+        <div class="modal-overlay" v-if="showInvite" @click.self="closeInviteModal">
           <div class="modal">
             <div class="modal-header">
-              <div class="modal-title">Add New User</div>
-              <button class="modal-close" @click="showInvite = false">
+              <div class="modal-title">Create New Account</div>
+              <button class="modal-close" @click="closeInviteModal">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
             <div class="modal-body">
-              <div class="step-notice">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" width="15" height="15"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                Adding users is a 2-step process via Supabase Dashboard
+
+              <!-- Success state -->
+              <div v-if="inviteSuccess" class="invite-success">
+                <div class="invite-success-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" width="32" height="32"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <div class="invite-success-title">Account Created!</div>
+                <div class="invite-success-msg">
+                  <strong>{{ inviteForm.name }}</strong> has been added as <strong>{{ inviteForm.role }}</strong>.<br/>
+                  They can now log in with their email and password.
+                </div>
+                <button class="btn-save" style="margin-top:16px;width:100%" @click="closeInviteModal">Done</button>
               </div>
 
-              <div class="step-list">
-                <div class="step">
-                  <div class="step-num">1</div>
-                  <div class="step-text">
-                    <strong>Create auth account</strong> — Go to your Supabase project → Authentication → Users → click <em>"Add user"</em> → enter email &amp; password → tick "Auto Confirm User"
+              <!-- Form state -->
+              <template v-else>
+                <div class="form-field">
+                  <label class="form-label">Full Name <span class="req">*</span></label>
+                  <input
+                    class="form-input"
+                    :class="{ 'input-error': inviteErrors.name }"
+                    v-model="inviteForm.name"
+                    placeholder="e.g. Juan dela Cruz"
+                    maxlength="60"
+                    @input="inviteErrors.name = ''"
+                  />
+                  <div class="field-error" v-if="inviteErrors.name">{{ inviteErrors.name }}</div>
+                </div>
+
+                <div class="form-field">
+                  <label class="form-label">Email Address <span class="req">*</span></label>
+                  <input
+                    class="form-input"
+                    :class="{ 'input-error': inviteErrors.email }"
+                    v-model="inviteForm.email"
+                    type="email"
+                    placeholder="e.g. juan@example.com"
+                    @input="inviteErrors.email = ''"
+                  />
+                  <div class="field-error" v-if="inviteErrors.email">{{ inviteErrors.email }}</div>
+                </div>
+
+                <div class="form-field">
+                  <label class="form-label">Password <span class="req">*</span></label>
+                  <div class="pw-wrap">
+                    <input
+                      class="form-input"
+                      :class="{ 'input-error': inviteErrors.password }"
+                      v-model="inviteForm.password"
+                      :type="showInvitePw ? 'text' : 'password'"
+                      placeholder="Minimum 6 characters"
+                      @input="inviteErrors.password = ''"
+                    />
+                    <button class="pw-toggle" type="button" @click="showInvitePw = !showInvitePw" tabindex="-1">
+                      <svg v-if="!showInvitePw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                  </div>
+                  <div class="field-error" v-if="inviteErrors.password">{{ inviteErrors.password }}</div>
+                </div>
+
+                <div class="form-field">
+                  <label class="form-label">Role <span class="req">*</span></label>
+                  <select class="form-input form-select" v-model="inviteForm.role">
+                    <option value="Staff">Staff</option>
+                    <option value="Viewer">Viewer</option>
+                    <option value="Administrator">Administrator</option>
+                  </select>
+                  <div class="form-hint">
+                    <strong>Staff</strong> — can edit inventory &nbsp;·&nbsp;
+                    <strong>Viewer</strong> — read only &nbsp;·&nbsp;
+                    <strong>Administrator</strong> — full access
                   </div>
                 </div>
-                <div class="step">
-                  <div class="step-num">2</div>
-                  <div class="step-text">
-                    <strong>Set the role here</strong> — After the user appears in this list, use the Role dropdown to assign <em>Administrator</em>, <em>Staff</em>, or <em>Viewer</em>
-                  </div>
-                </div>
-              </div>
 
-              <div class="form-field">
-                <label class="form-label">Display Name (optional — fill after account is created)</label>
-                <input class="form-input" v-model="inviteForm.name" placeholder="e.g. Juan dela Cruz" maxlength="60" />
-                <div class="form-hint">Set the name in Supabase Table Editor → profiles table → name column</div>
-              </div>
+                <div class="field-error global-error" v-if="inviteErrors.global">{{ inviteErrors.global }}</div>
+              </template>
 
-              <div class="form-field">
-                <label class="form-label">Intended Role</label>
-                <select class="form-input form-select" v-model="inviteForm.role">
-                  <option value="Staff">Staff</option>
-                  <option value="Viewer">Viewer</option>
-                  <option value="Administrator">Administrator</option>
-                </select>
-              </div>
-
-              <div class="supabase-link-box">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" width="14" height="14"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                <a :href="supabaseAuthUrl" target="_blank" rel="noopener">Open Supabase → Authentication → Users</a>
-              </div>
             </div>
-            <div class="modal-footer">
-              <button class="btn-cancel" @click="showInvite = false">Close</button>
-              <button class="btn-save" @click="refreshUsers">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
-                Refresh User List
+            <div class="modal-footer" v-if="!inviteSuccess">
+              <button class="btn-cancel" @click="closeInviteModal" :disabled="inviteLoading">Cancel</button>
+              <button class="btn-save" @click="createUser" :disabled="inviteLoading">
+                <svg v-if="inviteLoading" class="spin-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                {{ inviteLoading ? 'Creating...' : 'Create Account' }}
               </button>
             </div>
           </div>
@@ -300,11 +340,15 @@ const loading     = ref(false)
 const currentUser = ref(null)
 const search      = ref('')
 const savingRole  = ref(null)
-const showInvite  = ref(false)
+const showInvite   = ref(false)
 const removeTarget = ref(null)
-const inviteForm  = ref({ name: '', role: 'Staff' })
-const toast       = ref({ show: false, message: '', type: 'success' })
-let toastTimer    = null
+const inviteForm   = ref({ name: '', email: '', password: '', role: 'Staff' })
+const inviteErrors = ref({ name: '', email: '', password: '', global: '' })
+const inviteLoading = ref(false)
+const inviteSuccess = ref(false)
+const showInvitePw  = ref(false)
+const toast         = ref({ show: false, message: '', type: 'success' })
+let toastTimer      = null
 
 // ── Computed ──────────────────────────────────
 const filteredUsers = computed(() => {
@@ -347,6 +391,78 @@ async function fetchUsers() {
   }
 
   loading.value = false
+}
+
+function closeInviteModal() {
+  showInvite.value    = false
+  inviteSuccess.value = false
+  showInvitePw.value  = false
+  inviteForm.value    = { name: '', email: '', password: '', role: 'Staff' }
+  inviteErrors.value  = { name: '', email: '', password: '', global: '' }
+}
+
+async function createUser() {
+  // Validate
+  inviteErrors.value = { name: '', email: '', password: '', global: '' }
+  let valid = true
+  if (!inviteForm.value.name.trim()) { inviteErrors.value.name = 'Full name is required'; valid = false }
+  if (!inviteForm.value.email.trim()) { inviteErrors.value.email = 'Email is required'; valid = false }
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteForm.value.email)) { inviteErrors.value.email = 'Enter a valid email address'; valid = false }
+  if (!inviteForm.value.password) { inviteErrors.value.password = 'Password is required'; valid = false }
+  else if (inviteForm.value.password.length < 6) { inviteErrors.value.password = 'Password must be at least 6 characters'; valid = false }
+  if (!valid) return
+
+  inviteLoading.value = true
+
+  // Step 1: Create the auth user via Supabase signUp
+  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+    email:    inviteForm.value.email.trim(),
+    password: inviteForm.value.password,
+    options: {
+      data: { name: inviteForm.value.name.trim() }
+    }
+  })
+
+  if (signUpError) {
+    inviteErrors.value.global = signUpError.message
+    inviteLoading.value = false
+    return
+  }
+
+  const newUserId = signUpData?.user?.id
+  if (!newUserId) {
+    inviteErrors.value.global = 'Account created but could not retrieve user ID. Check Supabase.'
+    inviteLoading.value = false
+    return
+  }
+
+  // Step 2: Upsert the profile with name + role
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .upsert({
+      id:   newUserId,
+      name: inviteForm.value.name.trim(),
+      role: inviteForm.value.role,
+    })
+
+  if (profileError) {
+    inviteErrors.value.global = 'Auth account created but failed to set profile: ' + profileError.message
+    inviteLoading.value = false
+    return
+  }
+
+  // Step 3: Log activity & refresh
+  logActivity({
+    action:     'user.created',
+    entityType: 'user',
+    entityId:   newUserId,
+    entityName: inviteForm.value.name.trim(),
+    details:    { email: inviteForm.value.email.trim(), role: inviteForm.value.role },
+  })
+
+  inviteLoading.value = false
+  inviteSuccess.value = true
+  await fetchUsers()
 }
 
 async function refreshUsers() {
@@ -415,6 +531,20 @@ onMounted(async () => {
 
 
 <style scoped>
+.req { color: #B01020; }
+.input-error { border-color: #B01020 !important; background: #fff5f5 !important; }
+.field-error { color: #B01020; font-size: 11.5px; margin-top: 4px; font-weight: 500; }
+.global-error { margin-top: 8px; padding: 10px 12px; background: #fff5f5; border-radius: 8px; border: 1px solid #fecaca; }
+.pw-wrap { position: relative; }
+.pw-wrap .form-input { padding-right: 40px; width: 100%; box-sizing: border-box; }
+.pw-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #888; padding: 4px; display: flex; align-items: center; }
+.pw-toggle:hover { color: #333; }
+.invite-success { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 20px 0 8px; gap: 10px; }
+.invite-success-icon { width: 64px; height: 64px; background: #f0fdf4; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.invite-success-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 700; color: #1A1016; }
+.invite-success-msg { color: #555; font-size: 13.5px; line-height: 1.6; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin-icon { animation: spin 0.8s linear infinite; }
 .users-page { display: flex; flex-direction: column; gap: 20px; animation: fadeUp 0.4s both; }
 
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
