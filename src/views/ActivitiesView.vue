@@ -68,6 +68,7 @@
         v-for="act in filtered"
         :key="act.id"
         :class="'card-' + act.status"
+        @click="viewActivity(act)"
       >
         <!-- Card Header -->
         <div class="card-header">
@@ -93,7 +94,18 @@
         </div>
 
         <!-- Description -->
-        <div class="card-desc">{{ act.description }}</div>
+        <div class="card-desc" v-if="act.description">{{ act.description }}</div>
+
+        <!-- Activity Photo -->
+        <div class="card-photo-wrap" v-if="act.image_url">
+          <img :src="act.image_url" class="card-photo" :alt="act.title" @click="viewPhoto(act.image_url)" />
+        </div>
+
+        <!-- Activity Link -->
+        <a v-if="act.link" :href="act.link" target="_blank" rel="noopener" class="card-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          {{ act.link.replace(/^https?:\/\//, '').substring(0, 45) }}{{ act.link.length > 50 ? '…' : '' }}
+        </a>
 
         <!-- Inventory Items -->
         <div class="card-section" v-if="act.inventory_items.length > 0">
@@ -112,7 +124,7 @@
         </div>
 
         <!-- Footer -->
-        <div class="card-footer">
+        <div class="card-footer" @click.stop>
           <div class="card-assignee">
             <div class="assignee-avatar">{{ act.assigned_to.charAt(0) }}</div>
             <span class="assignee-name">{{ act.assigned_to }}</span>
@@ -306,6 +318,44 @@
               </div>
             </div>
 
+            <!-- Divider -->
+            <div class="form-section-divider">
+              <span>CSR / Media</span>
+            </div>
+
+            <!-- Activity Photo -->
+            <div class="form-field">
+              <label class="form-label">Activity Photo</label>
+              <div class="photo-upload-area" @click="triggerFileInput" @dragover.prevent @drop.prevent="handleDrop">
+                <input ref="fileInputRef" type="file" accept="image/*" style="display:none" @change="handleFileChange" />
+                <div v-if="imagePreview || modalForm.imageUrl" class="photo-preview-wrap">
+                  <img :src="imagePreview || modalForm.imageUrl" class="photo-preview" alt="Activity photo" />
+                  <button class="photo-remove" type="button" @click.stop="removeImage">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+                <div v-else class="photo-placeholder">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  <span>Click or drag & drop to upload photo</span>
+                  <span class="photo-hint">JPG, PNG, WEBP — max 5MB</span>
+                </div>
+              </div>
+              <div class="form-error" v-if="imageError">{{ imageError }}</div>
+              <div class="upload-progress" v-if="uploadingImage">
+                <div class="upload-bar" :style="{ width: uploadProgress + '%' }"></div>
+              </div>
+            </div>
+
+            <!-- Activity Link -->
+            <div class="form-field">
+              <label class="form-label">Activity Link</label>
+              <div class="link-input-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" class="link-icon"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                <input class="form-input link-input" type="url" v-model="modalForm.link" placeholder="https://facebook.com/your-csr-post" />
+              </div>
+              <div class="form-hint">Link to Facebook post, Google Drive folder, or any related URL.</div>
+            </div>
+
           </div>
 
           <div class="modal-footer">
@@ -319,6 +369,122 @@
       </div>
     </Transition></Teleport>
 
+
+    <!-- ══ VIEW ACTIVITY DETAIL ══ -->
+    <Teleport to="body"><Transition name="drawer-fade">
+      <div class="drawer-overlay" v-if="viewTarget" @click.self="viewTarget = null">
+        <div class="drawer">
+
+          <!-- Close -->
+          <button class="drawer-close" @click="viewTarget = null">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+
+          <!-- Photo banner -->
+          <div class="drawer-photo" v-if="viewTarget.image_url" @click="viewPhoto(viewTarget.image_url)">
+            <img :src="viewTarget.image_url" :alt="viewTarget.title" />
+            <div class="drawer-photo-zoom">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            </div>
+          </div>
+
+          <!-- Header -->
+          <div class="drawer-header">
+            <div class="drawer-mascot">{{ getMascot(viewTarget.mascot).emoji }}</div>
+            <div class="drawer-header-info">
+              <div class="drawer-title">{{ viewTarget.title }}</div>
+              <div class="drawer-date">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                {{ formatDate(viewTarget.date, viewTarget.time) }}
+                <span class="drawer-countdown" :class="'countdown-' + viewTarget.status">{{ daysUntil(viewTarget.date) }}</span>
+              </div>
+            </div>
+            <div class="drawer-status-badge" :class="getStatus(viewTarget.status).cls">{{ getStatus(viewTarget.status).label }}</div>
+          </div>
+
+          <div class="drawer-body">
+
+            <!-- Description -->
+            <div class="drawer-section" v-if="viewTarget.description">
+              <div class="drawer-section-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                Description
+              </div>
+              <div class="drawer-desc">{{ viewTarget.description }}</div>
+            </div>
+
+            <!-- Details grid -->
+            <div class="drawer-details-grid">
+              <div class="drawer-detail-item">
+                <div class="drawer-detail-label">Assigned To</div>
+                <div class="drawer-detail-value">
+                  <div class="drawer-avatar">{{ viewTarget.assigned_to.charAt(0) }}</div>
+                  {{ viewTarget.assigned_to }}
+                </div>
+              </div>
+              <div class="drawer-detail-item">
+                <div class="drawer-detail-label">Notify Before</div>
+                <div class="drawer-detail-value">{{ viewTarget.notify_before > 0 ? viewTarget.notify_before + ' day(s)' : 'None' }}</div>
+              </div>
+            </div>
+
+            <!-- Inventory -->
+            <div class="drawer-section" v-if="viewTarget.inventory_items?.length > 0">
+              <div class="drawer-section-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                Required Inventory ({{ viewTarget.inventory_items.length }} item{{ viewTarget.inventory_items.length !== 1 ? 's' : '' }})
+              </div>
+              <div class="drawer-inv-table">
+                <div class="drawer-inv-row drawer-inv-head">
+                  <span>Item</span><span>SKU</span><span>Qty</span>
+                </div>
+                <div class="drawer-inv-row" v-for="item in viewTarget.inventory_items" :key="item.sku">
+                  <span>{{ item.name }}</span>
+                  <span class="drawer-inv-sku">{{ item.sku || '—' }}</span>
+                  <span class="drawer-inv-qty">× {{ item.qty }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Link -->
+            <div class="drawer-section" v-if="viewTarget.link">
+              <div class="drawer-section-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                Activity Link
+              </div>
+              <a :href="viewTarget.link" target="_blank" rel="noopener" class="drawer-link">
+                {{ viewTarget.link }}
+              </a>
+            </div>
+
+          </div>
+
+          <!-- Footer actions -->
+          <div class="drawer-footer">
+            <button class="btn-cancel" @click="viewTarget = null">Close</button>
+            <button class="btn-status" @click="cycleStatus(viewTarget); viewTarget = null" v-if="viewTarget.status !== 'done'">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              {{ nextStatusLabel(viewTarget.status) }}
+            </button>
+            <button class="btn-save" @click="openModal(viewTarget); viewTarget = null">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Edit
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </Transition></Teleport>
+
+    <!-- ══ PHOTO LIGHTBOX ══ -->
+    <Teleport to="body"><Transition name="modal-fade">
+      <div class="lightbox-overlay" v-if="lightboxUrl" @click="lightboxUrl = null">
+        <img :src="lightboxUrl" class="lightbox-img" @click.stop />
+        <button class="lightbox-close" @click="lightboxUrl = null">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </Transition></Teleport>
 
     <!-- ══ DELETE CONFIRM ══ -->
     <Teleport to="body"><Transition name="modal-fade">
@@ -354,6 +520,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useActivities, MASCOTS, STATUSES } from '@/composables/useActivities'
+import { supabase } from '@/lib/supabase'
 
 const {
   activities, loading,
@@ -363,6 +530,80 @@ const {
   addActivity, updateActivity, deleteActivity, updateStatus,
   fetchActivities, subscribeRealtime, unsubscribeRealtime,
 } = useActivities()
+
+// ── View detail ───────────────────────────────
+const viewTarget = ref(null)
+function viewActivity(act) { viewTarget.value = act }
+
+// ── Image upload ──────────────────────────────
+const fileInputRef     = ref(null)
+const imagePreview     = ref('')
+const imageFile        = ref(null)
+const imageError       = ref('')
+const uploadingImage   = ref(false)
+const uploadProgress   = ref(0)
+const lightboxUrl      = ref('')
+
+function triggerFileInput() { fileInputRef.value?.click() }
+
+function handleFileChange(e) { processFile(e.target.files[0]) }
+function handleDrop(e) { processFile(e.dataTransfer.files[0]) }
+
+function processFile(file) {
+  imageError.value = ''
+  if (!file) return
+  if (!file.type.startsWith('image/')) { imageError.value = 'Please upload an image file'; return }
+  if (file.size > 5 * 1024 * 1024) { imageError.value = 'Image must be under 5MB'; return }
+  imageFile.value = file
+  const reader = new FileReader()
+  reader.onload = e => { imagePreview.value = e.target.result }
+  reader.readAsDataURL(file)
+}
+
+function removeImage() {
+  imageFile.value    = null
+  imagePreview.value = ''
+  modalForm.value.imageUrl = ''
+  if (fileInputRef.value) fileInputRef.value.value = ''
+}
+
+async function uploadImage() {
+  if (!imageFile.value) return modalForm.value.imageUrl || null
+  uploadingImage.value = true
+  uploadProgress.value = 30
+  imageError.value = ''
+
+  try {
+    const ext      = imageFile.value.name.split('.').pop()
+    const filename = `activity-${Date.now()}.${ext}`
+    const { data, error } = await supabase.storage
+      .from('activity-images')
+      .upload(filename, imageFile.value, { upsert: true })
+
+    uploadProgress.value = 90
+
+    if (error) {
+      console.error('Upload error:', error)
+      imageError.value = 'Upload failed: ' + error.message
+      uploadingImage.value = false
+      uploadProgress.value = 0
+      return modalForm.value.imageUrl || null // fall back to existing or null
+    }
+
+    const { data: urlData } = supabase.storage.from('activity-images').getPublicUrl(data.path)
+    uploadingImage.value = false
+    uploadProgress.value = 100
+    return urlData.publicUrl
+
+  } catch (err) {
+    console.error('Upload exception:', err)
+    uploadingImage.value = false
+    uploadProgress.value = 0
+    return modalForm.value.imageUrl || null // don't block save on upload failure
+  }
+}
+
+function viewPhoto(url) { lightboxUrl.value = url }
 
 onMounted(async () => {
   await fetchActivities()
@@ -408,12 +649,17 @@ const emptyForm = () => ({
   status:         'upcoming',
   notifyBefore:   1,
   inventoryItems: [],
+  imageUrl:       '',
+  link:           '',
 })
 
 const modalForm = ref(emptyForm())
 
 function openModal(act = null) {
   formErrors.value = {}
+  imageFile.value    = null
+  imagePreview.value = ''
+  imageError.value   = ''
   if (act) {
     editing.value  = act.id
     modalForm.value = {
@@ -426,6 +672,8 @@ function openModal(act = null) {
       status:         act.status,
       notifyBefore:   act.notify_before ?? 1,
       inventoryItems: (act.inventory_items || []).map(i => ({ ...i })),
+      imageUrl:       act.image_url || '',
+      link:           act.link || '',
     }
   } else {
     editing.value   = null
@@ -458,9 +706,10 @@ function validateForm() {
   return Object.keys(e).length === 0
 }
 
-function saveActivity() {
+async function saveActivity() {
   if (!validateForm()) return
-  const data = { ...modalForm.value }
+  const imageUrl = await uploadImage()
+  const data = { ...modalForm.value, imageUrl: imageUrl ?? modalForm.value.imageUrl ?? null }
   if (editing.value) {
     updateActivity(editing.value, data)
   } else {
@@ -639,6 +888,77 @@ function doDelete() {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Activity photo on card */
+.card-photo-wrap { border-radius: 10px; overflow: hidden; max-height: 180px; cursor: zoom-in; }
+.card-photo { width: 100%; height: 180px; object-fit: cover; display: block; transition: transform 0.2s; }
+.card-photo:hover { transform: scale(1.02); }
+
+/* Activity link on card */
+.card-link { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: #B01020; text-decoration: none; background: #FFF5F6; padding: 5px 10px; border-radius: 20px; border: 1px solid #FECDD3; transition: all 0.15s; word-break: break-all; }
+.card-link:hover { background: #B01020; color: white; border-color: #B01020; }
+
+/* Photo upload in modal */
+.form-section-divider { display: flex; align-items: center; gap: 10px; color: #9A8589; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 4px 0; }
+.form-section-divider::before, .form-section-divider::after { content: ''; flex: 1; height: 1px; background: #EDE3E5; }
+.photo-upload-area { border: 2px dashed #E0D0D4; border-radius: 12px; cursor: pointer; overflow: hidden; transition: border-color 0.2s; }
+.photo-upload-area:hover { border-color: #B01020; }
+.photo-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 28px 20px; color: #9A8589; }
+.photo-placeholder span { font-size: 13px; }
+.photo-hint { font-size: 11px !important; color: #C4B0B5; }
+.photo-preview-wrap { position: relative; }
+.photo-preview { width: 100%; max-height: 200px; object-fit: cover; display: block; }
+.photo-remove { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.6); border: none; border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer; }
+.upload-progress { height: 4px; background: #F5F0F1; border-radius: 2px; margin-top: 6px; overflow: hidden; }
+.upload-bar { height: 100%; background: #B01020; border-radius: 2px; transition: width 0.3s; }
+.link-input-wrap { position: relative; display: flex; align-items: center; }
+.link-icon { position: absolute; left: 12px; color: #9A8589; flex-shrink: 0; }
+.link-input { padding-left: 34px !important; }
+
+/* Activity Detail Drawer */
+.drawer-overlay { position: fixed; inset: 0; z-index: 9998; background: rgba(26,16,22,0.55); display: flex; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(4px); }
+.drawer { width: 100%; max-width: 600px; max-height: 88vh; background: white; border-radius: 20px; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0,0,0,0.2); overflow: hidden; position: relative; }
+.drawer-close { position: absolute; top: 14px; right: 14px; z-index: 10; background: rgba(255,255,255,0.9); border: none; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #555; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+.drawer-close:hover { background: white; color: #B01020; }
+.drawer-photo { position: relative; height: 220px; overflow: hidden; cursor: zoom-in; flex-shrink: 0; }
+.drawer-photo img { width: 100%; height: 100%; object-fit: cover; }
+.drawer-photo-zoom { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.5); border-radius: 8px; padding: 6px; color: white; display: flex; align-items: center; }
+.drawer-header { display: flex; align-items: flex-start; gap: 12px; padding: 20px 20px 0; flex-shrink: 0; }
+.drawer-mascot { font-size: 28px; flex-shrink: 0; }
+.drawer-header-info { flex: 1; min-width: 0; }
+.drawer-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 700; color: #1A1016; line-height: 1.2; }
+.drawer-date { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #9A8589; margin-top: 4px; flex-wrap: wrap; }
+.drawer-countdown { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 20px; background: #F5F0F1; color: #7A5A60; }
+.drawer-status-badge { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
+.drawer-body { flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 18px; }
+.drawer-section { display: flex; flex-direction: column; gap: 8px; }
+.drawer-section-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #9A8589; }
+.drawer-desc { font-size: 13.5px; color: #3D2830; line-height: 1.7; }
+.drawer-details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.drawer-detail-item { background: #FAF6F7; border-radius: 12px; padding: 12px 14px; }
+.drawer-detail-label { font-size: 11px; font-weight: 600; color: #9A8589; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+.drawer-detail-value { font-size: 13.5px; font-weight: 600; color: #1A1016; display: flex; align-items: center; gap: 6px; }
+.drawer-avatar { width: 22px; height: 22px; background: #B01020; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+.drawer-inv-table { border: 1.5px solid #EDE3E5; border-radius: 10px; overflow: hidden; }
+.drawer-inv-row { display: grid; grid-template-columns: 1fr 80px 50px; padding: 9px 12px; font-size: 13px; border-bottom: 1px solid #F5F0F1; }
+.drawer-inv-row:last-child { border-bottom: none; }
+.drawer-inv-head { background: #FAF6F7; font-size: 11px; font-weight: 700; color: #9A8589; text-transform: uppercase; }
+.drawer-inv-sku { color: #9A8589; }
+.drawer-inv-qty { font-weight: 700; color: #B01020; }
+.drawer-link { font-size: 13px; color: #B01020; word-break: break-all; text-decoration: none; padding: 10px 12px; background: #FFF5F6; border-radius: 10px; border: 1px solid #FECDD3; display: block; }
+.drawer-link:hover { background: #B01020; color: white; }
+.drawer-footer { display: flex; gap: 10px; padding: 16px 20px; border-top: 1.5px solid #F5F0F1; flex-shrink: 0; justify-content: flex-end; }
+.drawer-fade-enter-active, .drawer-fade-leave-active { transition: opacity 0.2s; }
+.drawer-fade-enter-active .drawer, .drawer-fade-leave-active .drawer { transition: transform 0.2s cubic-bezier(0.4,0,0.2,1); }
+.drawer-fade-enter-from, .drawer-fade-leave-to { opacity: 0; }
+.drawer-fade-enter-from .drawer, .drawer-fade-leave-to .drawer { transform: scale(0.96); }
+.activity-card { cursor: pointer; }
+
+/* Lightbox */
+.lightbox-overlay { position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; padding: 24px; cursor: zoom-out; }
+.lightbox-img { max-width: 90vw; max-height: 88vh; border-radius: 12px; object-fit: contain; box-shadow: 0 20px 60px rgba(0,0,0,0.5); cursor: default; }
+.lightbox-close { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.15); border: none; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer; }
+.lightbox-close:hover { background: rgba(255,255,255,0.25); }
 
 /* Inventory section */
 .card-section { display: flex; flex-direction: column; gap: 8px; }

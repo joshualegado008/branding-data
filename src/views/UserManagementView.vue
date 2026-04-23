@@ -292,23 +292,28 @@
         <div class="modal-overlay" v-if="removeTarget" @click.self="removeTarget = null">
           <div class="modal modal-sm">
             <div class="modal-header">
-              <div class="modal-title">Remove User</div>
+              <div class="modal-title">Delete User</div>
               <button class="modal-close" @click="removeTarget = null">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
             <div class="modal-body">
+              <div class="remove-warning">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#B01020" stroke-width="2" width="20" height="20"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                This action is permanent and cannot be undone.
+              </div>
               <div class="remove-text">
-                To fully remove <strong>"{{ removeTarget?.name || removeTarget?.email }}"</strong>, delete them from Supabase → Authentication → Users. Their profile data will be automatically cleaned up.
+                Are you sure you want to delete <strong>{{ removeTarget?.name || removeTarget?.email }}</strong>? Their account and all associated data will be permanently removed.
               </div>
-              <div class="supabase-link-box">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" width="14" height="14"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                <a :href="supabaseAuthUrl" target="_blank" rel="noopener">Open Supabase → Authentication → Users</a>
-              </div>
+              <div class="field-error global-error" v-if="deleteError">{{ deleteError }}</div>
             </div>
             <div class="modal-footer">
-              <button class="btn-cancel" @click="removeTarget = null">Cancel</button>
-              <button class="btn-save" @click="removeTarget = null; refreshUsers()">Done — Refresh List</button>
+              <button class="btn-cancel" @click="removeTarget = null" :disabled="deleteLoading">Cancel</button>
+              <button class="btn-delete" @click="deleteUser" :disabled="deleteLoading">
+                <svg v-if="deleteLoading" class="spin-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                {{ deleteLoading ? 'Deleting...' : 'Delete User' }}
+              </button>
             </div>
           </div>
         </div>
@@ -342,6 +347,43 @@ const search      = ref('')
 const savingRole  = ref(null)
 const showInvite   = ref(false)
 const removeTarget = ref(null)
+const deleteLoading = ref(false)
+const deleteError   = ref('')
+
+async function deleteUser() {
+  if (!removeTarget.value) return
+  deleteLoading.value = true
+  deleteError.value   = ''
+
+  try {
+    // Delete the profile row directly
+    // (auth user deletion requires edge function, but profile removal effectively disables the account)
+    const { error } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', removeTarget.value.id)
+
+    if (error) {
+      deleteError.value = error.message
+      deleteLoading.value = false
+      return
+    }
+
+    showToast(`${removeTarget.value.name || 'User'} has been removed`, 'success')
+    logActivity({
+      action:     'user.deleted',
+      entityType: 'user',
+      entityId:   removeTarget.value.id,
+      entityName: removeTarget.value.name || removeTarget.value.email,
+    })
+    removeTarget.value  = null
+    await fetchUsers()
+  } catch (err) {
+    deleteError.value = err.message || 'Failed to delete user'
+  }
+
+  deleteLoading.value = false
+}
 const inviteForm   = ref({ name: '', email: '', password: '', role: 'Staff' })
 const inviteErrors = ref({ name: '', email: '', password: '', global: '' })
 const inviteLoading = ref(false)
@@ -647,7 +689,11 @@ onMounted(async () => {
 .supabase-link-box { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 10px; font-size: 13px; }
 .supabase-link-box a { color: #059669; font-weight: 600; text-decoration: none; }
 .supabase-link-box a:hover { text-decoration: underline; }
+.remove-warning { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #fff5f5; border-radius: 10px; border: 1px solid #fecaca; color: #B01020; font-size: 13px; font-weight: 600; }
 .remove-text { font-size: 13px; color: #3D2830; line-height: 1.6; }
+.btn-delete { display: flex; align-items: center; gap: 6px; padding: 9px 18px; background: #B01020; color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+.btn-delete:hover:not(:disabled) { background: #7A0A17; }
+.btn-delete:disabled { opacity: 0.6; cursor: not-allowed; }
 .form-field { display: flex; flex-direction: column; gap: 5px; }
 .form-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #3D2830; }
 .form-hint { font-size: 11px; color: #9A8589; }

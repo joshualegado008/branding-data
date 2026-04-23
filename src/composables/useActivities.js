@@ -111,6 +111,8 @@ async function addActivity(payload) {
     status: payload.status,
     notify_before: payload.notifyBefore,
     inventory_items: payload.inventoryItems,
+    image_url: payload.imageUrl || null,
+    link: payload.link || null,
   }
   const { data, error: err } = await supabase.from('activities').insert([row]).select().single()
   if (err) throw err
@@ -129,6 +131,8 @@ async function updateActivity(id, payload) {
     status: payload.status,
     notify_before: payload.notifyBefore,
     inventory_items: payload.inventoryItems,
+    image_url: payload.imageUrl || null,
+    link: payload.link || null,
   }
   const { data, error: err } = await supabase
     .from('activities')
