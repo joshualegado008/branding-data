@@ -124,33 +124,25 @@
         </div>
 
         <div class="activity-list">
-          <div class="activity-item" v-for="act in activities.slice(0, 8)" :key="act.id">
-            <div class="activity-icon" :class="'act-' + act.type">
-              <!-- restock -->
-              <svg v-if="act.type === 'restock'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
-                <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-              </svg>
-              <!-- dispatch -->
-              <svg v-else-if="act.type === 'dispatch'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
-                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-              </svg>
-              <!-- low -->
-              <svg v-else-if="act.type === 'low'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-              </svg>
-              <!-- new -->
-              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
-                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
-              </svg>
+          <div class="activity-item" v-for="log in recentLogs" :key="log.id">
+            <div class="activity-icon" :class="'act-' + getLogType(log.action)">
+              <svg v-if="getLogType(log.action) === 'restock'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+              <svg v-else-if="getLogType(log.action) === 'dispatch'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              <svg v-else-if="getLogType(log.action) === 'delete'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              <svg v-else-if="getLogType(log.action) === 'auth'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
             </div>
             <div class="activity-content">
               <div class="activity-desc">
-                <span class="act-type-label">{{ actLabel(act.type) }}</span>
-                {{ act.product }}
-                <span class="act-qty" v-if="act.type !== 'low'">× {{ act.qty }}</span>
+                <span class="act-type-label">{{ getLogLabel(log.action) }}</span>
+                {{ log.entity_name || '' }}
+                <span class="act-qty" v-if="log.details?.qty">× {{ log.details.qty }}</span>
               </div>
-              <div class="activity-meta">{{ act.user }} · {{ act.time }}</div>
+              <div class="activity-meta">{{ log.user_name }} · {{ formatLogTime(log.created_at) }}</div>
             </div>
+          </div>
+          <div class="activity-empty" v-if="recentLogs.length === 0">
+            No recent activity yet.
           </div>
         </div>
       </div>
@@ -162,8 +154,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useInventory } from '@/composables/useInventory'
-import { useActivities } from '@/composables/useActivities'
 import { getProfile } from '@/composables/useAuth'
+import { supabase } from '@/lib/supabase'
 
 const {
   totalProducts, totalStock, totalValue,
@@ -171,15 +163,68 @@ const {
   fetchProducts, fetchCategories,
 } = useInventory()
 
-const { activities, fetchActivities } = useActivities()
-
-const session = ref({ name: 'User', role: 'Staff' })
+const session    = ref({ name: 'User', role: 'Staff' })
+const recentLogs = ref([])
 
 onMounted(async () => {
   const profile = await getProfile()
   if (profile) session.value = profile
-  await Promise.all([fetchProducts(), fetchCategories(), fetchActivities()])
+  await Promise.all([fetchProducts(), fetchCategories(), fetchRecentLogs()])
 })
+
+async function fetchRecentLogs() {
+  const { data } = await supabase
+    .from('activity_logs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(8)
+  if (data) recentLogs.value = data
+}
+
+function getLogType(action) {
+  if (!action) return 'new'
+  if (action.includes('add') || action.includes('create')) return 'new'
+  if (action.includes('restock') || action.includes('transfer')) return 'restock'
+  if (action.includes('dispense') || action.includes('dispatch')) return 'dispatch'
+  if (action.includes('delete') || action.includes('remove')) return 'delete'
+  if (action.includes('auth') || action.includes('login') || action.includes('logout')) return 'auth'
+  return 'new'
+}
+
+function getLogLabel(action) {
+  if (!action) return 'Action'
+  const map = {
+    'product.add':       'Added',
+    'product.update':    'Updated',
+    'product.delete':    'Deleted',
+    'stock.transfer':    'Transferred',
+    'stock.dispensed':   'Released',
+    'auth.login':        'Logged in',
+    'auth.logout':       'Logged out',
+    'user.created':      'Created user',
+    'user.deleted':      'Deleted user',
+    'user.role_change':  'Changed role',
+    'equipment.borrow':  'Borrowed',
+    'equipment.return':  'Returned',
+    'activity.created':  'Created activity',
+  }
+  return map[action] || action.split('.').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
+function formatLogTime(ts) {
+  if (!ts) return ''
+  const d = new Date(ts)
+  const now = new Date()
+  const diffMs = now - d
+  const diffMin = Math.floor(diffMs / 60000)
+  const diffHr  = Math.floor(diffMs / 3600000)
+  const diffDay = Math.floor(diffMs / 86400000)
+  if (diffMin < 1)  return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  if (diffHr  < 24) return `${diffHr}h ago`
+  if (diffDay < 7)  return `${diffDay}d ago`
+  return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
+}
 
 // Greeting
 const hour = new Date().getHours()
@@ -195,8 +240,7 @@ const today = new Date().toLocaleDateString('en-PH', {
 
 function actLabel(type) {
   return { restock: 'Restocked', dispatch: 'Dispatched', low: 'Low stock:', new: 'Added' }[type] || type
-}
-</script>
+}</script>
 
 <style scoped>
 
@@ -357,6 +401,7 @@ function actLabel(type) {
 .act-type-label { font-weight: 600; }
 .act-qty { color: #9A8589; font-size: 12px; }
 .activity-meta { font-size: 11px; color: #9A8589; margin-top: 2px; }
+.activity-empty { font-size: 13px; color: #9A8589; padding: 20px; text-align: center; }
 
 /* Animations */
 @keyframes fadeUp {

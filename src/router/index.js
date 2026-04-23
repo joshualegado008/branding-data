@@ -20,6 +20,7 @@ const QRGeneratorView      = () => import('@/views/QRGeneratorView.vue')
 const ActivityLogView      = () => import('@/views/ActivityLogView.vue')
 const UserManagementView   = () => import('@/views/UserManagementView.vue')
 const EquipmentScanView    = () => import('@/views/EquipmentScanView.vue')
+const DispenseRecordsView  = () => import('@/views/DispenseRecordsView.vue')
 
 const routes = [
   {
@@ -46,6 +47,7 @@ const routes = [
       { path: 'activity-log',    name: 'ActivityLog',    component: ActivityLogView,    meta: { adminOnly: true } },
       { path: 'user-management',  name: 'UserManagement',  component: UserManagementView,  meta: { adminOnly: true } },
       { path: 'equipment-scan',    name: 'EquipmentScan',   component: EquipmentScanView },
+      { path: 'dispense-records',  name: 'DispenseRecords', component: DispenseRecordsView },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },

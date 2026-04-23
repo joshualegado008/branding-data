@@ -197,6 +197,49 @@ async function updateRoom1Stock(id, room1_stock) {
   return data
 }
 
+async function dispenseStock(product, qty, location, recipient, purpose, userName) {
+  if (qty <= 0) throw new Error('Quantity must be greater than 0')
+
+  const currentStock = location === 'room1' ? (product.room1_stock || 0) : product.stock
+  if (qty > currentStock) throw new Error(`Only ${currentStock} ${product.unit} available in ${location === 'room1' ? 'Room 1' : 'Warehouse'}`)
+
+  const updateData = location === 'room1'
+    ? { room1_stock: currentStock - qty }
+    : { stock: product.stock - qty }
+
+  const { data, error: err } = await supabase
+    .from('products')
+    .update(updateData)
+    .eq('id', product.id)
+    .select()
+    .single()
+  if (err) throw err
+
+  const i = products.value.findIndex(p => p.id === product.id)
+  if (i !== -1) products.value[i] = data
+
+  // Record in stock_transfers table as a dispense
+  await supabase.from('stock_transfers').insert([{
+    product_id:          product.id,
+    product_name:        product.name,
+    quantity:            qty,
+    from_location:       location,
+    to_location:         'released',
+    notes:               `Recipient: ${recipient} | Purpose: ${purpose}`,
+    transferred_by_name: userName || 'Unknown',
+  }])
+
+  logActivity({
+    action:     'stock.dispensed',
+    entityType: 'stock',
+    entityId:   product.id,
+    entityName: product.name,
+    details:    { qty, location, recipient, purpose, stock_after: location === 'room1' ? data.room1_stock : data.stock },
+  })
+
+  return data
+}
+
 async function transferToRoom1(product, qty, notes, userName) {
   if (qty <= 0) throw new Error('Quantity must be greater than 0')
   if (qty > product.stock) throw new Error('Not enough warehouse stock')
@@ -288,6 +331,6 @@ export function useInventory() {
     fetchProducts, addProduct, updateProduct, deleteProduct,
     fetchCategories, addCategory, updateCategory, deleteCategory,
     subscribeRealtime, unsubscribeRealtime,
-    updateRoom1Stock, transferToRoom1, transferFromRoom1,
+    updateRoom1Stock, transferToRoom1, transferFromRoom1, dispenseStock,
   }
 }

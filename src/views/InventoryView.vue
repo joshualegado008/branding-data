@@ -192,6 +192,11 @@
             </td>
             <td>
               <div class="action-btns">
+                <button class="btn-icon btn-icon-dispense" @click="openDispense(product)" title="Release / Dispense stock">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="9 11 12 14 22 4"/>
+                  </svg>
+                </button>
                 <button class="btn-icon" @click="openModal(product)" title="Edit">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -347,6 +352,96 @@
     <Teleport to="body"><Transition name="toast">
       <div class="toast" v-if="toast.show" :class="'toast-' + toast.type">
         {{ toast.message }}
+      </div>
+    </Transition></Teleport>
+
+    <!-- ══ DISPENSE / RELEASE MODAL ══ -->
+    <Teleport to="body"><Transition name="modal-fade">
+      <div class="modal-overlay" v-if="showDispense" @click.self="closeDispense">
+        <div class="modal modal-sm">
+          <div class="modal-header">
+            <div class="modal-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#B01020" stroke-width="2" width="16" height="16" style="margin-right:6px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="9 11 12 14 22 4"/></svg>
+              Release / Dispense Stock
+            </div>
+            <button class="modal-close" @click="closeDispense">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="modal-body" v-if="dispenseProduct">
+
+            <!-- Product info -->
+            <div class="dispense-product-info">
+              <div class="dispense-product-name">{{ dispenseProduct.name }}</div>
+              <div class="dispense-product-stocks">
+                <span class="dispense-stock-pill">
+                  <i class="bi bi-building"></i> Warehouse: <strong>{{ dispenseProduct.stock }} {{ dispenseProduct.unit }}</strong>
+                </span>
+                <span class="dispense-stock-pill dispense-stock-r1">
+                  <i class="bi bi-door-open"></i> Room 1: <strong>{{ dispenseProduct.room1_stock || 0 }} {{ dispenseProduct.unit }}</strong>
+                </span>
+              </div>
+            </div>
+
+            <!-- Location -->
+            <div class="form-field">
+              <label class="form-label">Release From <span class="req">*</span></label>
+              <div class="dispense-loc-options">
+                <div
+                  class="dispense-loc-opt"
+                  :class="{ selected: dispenseLocation === 'warehouse' }"
+                  @click="dispenseLocation = 'warehouse'"
+                >
+                  <i class="bi bi-building"></i> Warehouse
+                  <span class="dispense-loc-stock">{{ dispenseProduct.stock }} {{ dispenseProduct.unit }}</span>
+                </div>
+                <div
+                  class="dispense-loc-opt"
+                  :class="{ selected: dispenseLocation === 'room1' }"
+                  @click="dispenseLocation = 'room1'"
+                >
+                  <i class="bi bi-door-open"></i> Room 1
+                  <span class="dispense-loc-stock">{{ dispenseProduct.room1_stock || 0 }} {{ dispenseProduct.unit }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quantity -->
+            <div class="form-field">
+              <label class="form-label">Quantity to Release <span class="req">*</span></label>
+              <div class="qty-input-wrap">
+                <button class="qty-btn" @click="dispenseQty = Math.max(1, dispenseQty - 1)">−</button>
+                <input class="form-input qty-input" type="number" v-model.number="dispenseQty" min="1" :max="dispenseLocation === 'room1' ? (dispenseProduct.room1_stock || 0) : dispenseProduct.stock" />
+                <button class="qty-btn" @click="dispenseQty++">+</button>
+                <span class="qty-unit">{{ dispenseProduct.unit }}</span>
+              </div>
+            </div>
+
+            <!-- Recipient -->
+            <div class="form-field">
+              <label class="form-label">Given To / Recipient <span class="req">*</span></label>
+              <input class="form-input" :class="{ 'input-error': dispenseErrors.recipient }" v-model="dispenseRecipient" placeholder="e.g. LGU Naic, Dept of Tourism, Admin Juan" @input="dispenseErrors.recipient = ''" />
+              <div class="form-error" v-if="dispenseErrors.recipient">{{ dispenseErrors.recipient }}</div>
+            </div>
+
+            <!-- Purpose -->
+            <div class="form-field">
+              <label class="form-label">Purpose <span class="req">*</span></label>
+              <textarea class="form-input form-textarea" :class="{ 'input-error': dispenseErrors.purpose }" v-model="dispensePurpose" placeholder="e.g. CSR Activity - Fiesta sa Naic, given 5 tumblers as giveaways to LGU" rows="2" @input="dispenseErrors.purpose = ''"></textarea>
+              <div class="form-error" v-if="dispenseErrors.purpose">{{ dispenseErrors.purpose }}</div>
+            </div>
+
+            <div class="form-error" v-if="dispenseErrors.global" style="margin-top:4px">{{ dispenseErrors.global }}</div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-cancel" @click="closeDispense" :disabled="dispensing">Cancel</button>
+            <button class="btn-save btn-dispense" @click="doDispense" :disabled="dispensing">
+              <svg v-if="dispensing" class="spin-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="9 11 12 14 22 4"/></svg>
+              {{ dispensing ? 'Releasing...' : 'Confirm Release' }}
+            </button>
+          </div>
+        </div>
       </div>
     </Transition></Teleport>
 
@@ -643,7 +738,7 @@ const {
   fetchProducts, fetchCategories,
   addProduct, updateProduct, deleteProduct,
   subscribeRealtime, unsubscribeRealtime,
-  transferToRoom1, transferFromRoom1,
+  transferToRoom1, transferFromRoom1, dispenseStock,
 } = useInventory()
 
 // ── Profile ───────────────────────────────────
@@ -775,6 +870,59 @@ async function doDelete() {
 
 
 // -- Transfer Modal ---
+// ── DISPENSE / RELEASE ────────────────────────
+const showDispense      = ref(false)
+const dispenseProduct   = ref(null)
+const dispenseLocation  = ref('warehouse')
+const dispenseQty       = ref(1)
+const dispenseRecipient = ref('')
+const dispensePurpose   = ref('')
+const dispenseErrors    = ref({ recipient: '', purpose: '', global: '' })
+const dispensing        = ref(false)
+
+function openDispense(product) {
+  dispenseProduct.value   = product
+  dispenseLocation.value  = product.stock > 0 ? 'warehouse' : 'room1'
+  dispenseQty.value       = 1
+  dispenseRecipient.value = ''
+  dispensePurpose.value   = ''
+  dispenseErrors.value    = { recipient: '', purpose: '', global: '' }
+  showDispense.value      = true
+}
+
+function closeDispense() {
+  showDispense.value    = false
+  dispenseProduct.value = null
+}
+
+async function doDispense() {
+  dispenseErrors.value = { recipient: '', purpose: '', global: '' }
+  let valid = true
+  if (!dispenseRecipient.value.trim()) { dispenseErrors.value.recipient = 'Recipient is required'; valid = false }
+  if (!dispensePurpose.value.trim())   { dispenseErrors.value.purpose   = 'Purpose is required'; valid = false }
+  if (dispenseQty.value < 1)           { dispenseErrors.value.global    = 'Quantity must be at least 1'; valid = false }
+  if (!valid) return
+
+  dispensing.value = true
+  try {
+    const userName = currentProfile.value?.name || 'Unknown'
+    await dispenseStock(
+      dispenseProduct.value,
+      dispenseQty.value,
+      dispenseLocation.value,
+      dispenseRecipient.value.trim(),
+      dispensePurpose.value.trim(),
+      userName
+    )
+    showToast(`${dispenseQty.value} ${dispenseProduct.value.unit} of "${dispenseProduct.value.name}" released to ${dispenseRecipient.value}`, 'success')
+    closeDispense()
+  } catch (err) {
+    dispenseErrors.value.global = err.message
+  } finally {
+    dispensing.value = false
+  }
+}
+
 const showTransfer    = ref(false)
 const transferProduct = ref(null)
 const transferDir     = ref("toRoom1")
@@ -1308,6 +1456,30 @@ function showToast(message, type = 'success') {
 }
 .btn-icon:hover { background: #FFF5F6; border-color: #B01020; color: #B01020; }
 .btn-icon-del:hover { background: #FFF5F6; border-color: #E8394A; color: #E8394A; }
+.btn-icon-dispense:hover { background: #f0fdf4; border-color: #059669; color: #059669; }
+
+/* Dispense modal */
+.dispense-product-info { background: #FAF6F7; border-radius: 12px; padding: 12px 14px; margin-bottom: 4px; }
+.dispense-product-name { font-size: 14px; font-weight: 700; color: #1A1016; margin-bottom: 8px; }
+.dispense-product-stocks { display: flex; gap: 8px; flex-wrap: wrap; }
+.dispense-stock-pill { font-size: 12px; color: #555; background: white; padding: 4px 10px; border-radius: 20px; border: 1.5px solid #EDE3E5; display: flex; align-items: center; gap: 5px; }
+.dispense-stock-r1 { border-color: #B01020; color: #B01020; }
+.dispense-loc-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dispense-loc-opt { border: 2px solid #EDE3E5; border-radius: 10px; padding: 10px 14px; cursor: pointer; font-size: 13px; font-weight: 600; color: #555; display: flex; flex-direction: column; gap: 4px; transition: all 0.15s; }
+.dispense-loc-opt:hover { border-color: #B01020; color: #B01020; }
+.dispense-loc-opt.selected { border-color: #B01020; background: #FFF5F6; color: #B01020; }
+.dispense-loc-stock { font-size: 11px; font-weight: 500; color: #9A8589; }
+.dispense-loc-opt.selected .dispense-loc-stock { color: #B01020; }
+.qty-input-wrap { display: flex; align-items: center; gap: 8px; }
+.qty-btn { width: 34px; height: 38px; border: 1.5px solid #EDE3E5; border-radius: 8px; background: #F7F3F4; font-size: 18px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #555; transition: all 0.15s; flex-shrink: 0; }
+.qty-btn:hover { background: #B01020; color: white; border-color: #B01020; }
+.qty-input { width: 80px !important; text-align: center; font-size: 16px; font-weight: 700; }
+.qty-unit { font-size: 13px; color: #9A8589; font-weight: 500; }
+.input-error { border-color: #B01020 !important; background: #fff5f5 !important; }
+.btn-dispense { background: #059669; }
+.btn-dispense:hover:not(:disabled) { background: #047857; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin-icon { animation: spin 0.8s linear infinite; }
 
 /* Modal */
 .modal-overlay {
