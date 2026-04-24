@@ -420,18 +420,18 @@
             <!-- Recipient -->
             <div class="form-field">
               <label class="form-label">Given To / Recipient <span class="req">*</span></label>
-              <input class="form-input" :class="{ 'input-error': dispenseErrors.recipient }" v-model="dispenseRecipient" placeholder="e.g. LGU Naic, Dept of Tourism, Admin Juan" @input="dispenseErrors.recipient = ''" />
-              <div class="form-error" v-if="dispenseErrors.recipient">{{ dispenseErrors.recipient }}</div>
+              <input class="form-input" :class="{ 'input-error': scanDispenseErrors.recipient }" v-model="dispenseRecipient" placeholder="e.g. LGU Naic, Dept of Tourism, Admin Juan" @input="scanDispenseErrors.recipient = ''" />
+              <div class="form-error" v-if="scanDispenseErrors.recipient">{{ scanDispenseErrors.recipient }}</div>
             </div>
 
             <!-- Purpose -->
             <div class="form-field">
               <label class="form-label">Purpose <span class="req">*</span></label>
-              <textarea class="form-input form-textarea" :class="{ 'input-error': dispenseErrors.purpose }" v-model="dispensePurpose" placeholder="e.g. CSR Activity - Fiesta sa Naic, given 5 tumblers as giveaways to LGU" rows="2" @input="dispenseErrors.purpose = ''"></textarea>
-              <div class="form-error" v-if="dispenseErrors.purpose">{{ dispenseErrors.purpose }}</div>
+              <textarea class="form-input form-textarea" :class="{ 'input-error': scanDispenseErrors.purpose }" v-model="dispensePurpose" placeholder="e.g. CSR Activity - Fiesta sa Naic, given 5 tumblers as giveaways to LGU" rows="2" @input="scanDispenseErrors.purpose = ''"></textarea>
+              <div class="form-error" v-if="scanDispenseErrors.purpose">{{ scanDispenseErrors.purpose }}</div>
             </div>
 
-            <div class="form-error" v-if="dispenseErrors.global" style="margin-top:4px">{{ dispenseErrors.global }}</div>
+            <div class="form-error" v-if="scanDispenseErrors.global" style="margin-top:4px">{{ scanDispenseErrors.global }}</div>
           </div>
           <div class="modal-footer">
             <button class="btn-cancel" @click="closeDispense" :disabled="dispensing">Cancel</button>
@@ -613,6 +613,139 @@
           </div>
 
           <!-- Step 2: Found existing product → add stock -->
+          <!-- Step: Choose action -->
+          <div class="scanner-body" v-if="scanStep === 'choose-action'">
+            <div class="found-banner found-existing">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              Product found in inventory
+            </div>
+            <div class="found-product">
+              <div class="fp-name">{{ scannedProduct?.name }}</div>
+              <div class="fp-meta">
+                <span class="fp-sku">{{ scannedProduct?.sku }}</span>
+                <span>{{ scannedProduct?.category }}</span>
+              </div>
+              <div class="fp-stock-row">
+                <span class="fp-stock-pill">🏢 Warehouse: <strong>{{ scannedProduct?.stock }} {{ scannedProduct?.unit || 'pcs' }}</strong></span>
+                <span class="fp-stock-pill fp-stock-r1">🚪 Room 1: <strong>{{ scannedProduct?.room1_stock || 0 }} {{ scannedProduct?.unit || 'pcs' }}</strong></span>
+              </div>
+            </div>
+            <div class="action-chooser-list">
+              <button class="action-choice-btn" @click="scanStep = 'add-stock'">
+                <div class="acb-icon acb-red">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </div>
+                <div class="acb-text">
+                  <div class="acb-title">Add Stock</div>
+                  <div class="acb-sub">Add items to warehouse inventory</div>
+                </div>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+              <button class="action-choice-btn" @click="scanStep = 'add-room1'">
+                <div class="acb-icon acb-blue">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                </div>
+                <div class="acb-text">
+                  <div class="acb-title">Add to Room 1</div>
+                  <div class="acb-sub">Move stock from warehouse to Room 1</div>
+                </div>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+              <button class="action-choice-btn" @click="scanStep = 'dispense'">
+                <div class="acb-icon acb-green">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="9 11 12 14 22 4"/></svg>
+                </div>
+                <div class="acb-text">
+                  <div class="acb-title">Release / Dispense</div>
+                  <div class="acb-sub">Give items to someone — records recipient & purpose</div>
+                </div>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+            <button class="btn-cancel-scan-inv" @click="resetScanner">← Scan Again</button>
+          </div>
+
+          <!-- Step: Add to Room 1 -->
+          <div class="scanner-body" v-if="scanStep === 'add-room1'">
+            <div class="found-product">
+              <div class="fp-name">{{ scannedProduct?.name }}</div>
+              <div class="fp-stock-row">
+                <span class="fp-stock-pill">🏢 Warehouse: <strong>{{ scannedProduct?.stock }}</strong></span>
+                <span class="fp-stock-pill fp-stock-r1">🚪 Room 1: <strong>{{ scannedProduct?.room1_stock || 0 }}</strong></span>
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Quantity to Move to Room 1</label>
+              <div class="qty-row">
+                <button class="qty-btn" @click="scanDispenseQty = Math.max(1, scanDispenseQty - 1)">−</button>
+                <input class="form-input qty-input" type="number" v-model.number="scanDispenseQty" min="1" :max="scannedProduct?.stock" />
+                <button class="qty-btn" @click="scanDispenseQty++">+</button>
+                <span class="qty-unit">{{ scannedProduct?.unit || 'pcs' }}</span>
+              </div>
+              <div class="form-hint">Available in warehouse: {{ scannedProduct?.stock }}</div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Notes (optional)</label>
+              <input class="form-input" v-model="scanDispenseNotes" placeholder="e.g. For tomorrow's CSR activity" />
+            </div>
+            <div class="form-error" v-if="scanDispenseError">{{ scanDispenseError }}</div>
+            <div class="scanner-footer">
+              <button class="btn-cancel" @click="scanStep = 'choose-action'">← Back</button>
+              <button class="btn-save btn-blue" @click="doRoom1Transfer" :disabled="saving">
+                <div class="spinner-sm" v-if="saving"></div>
+                <span v-else>Move to Room 1</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Step: Dispense -->
+          <div class="scanner-body" v-if="scanStep === 'dispense'">
+            <div class="found-product">
+              <div class="fp-name">{{ scannedProduct?.name }}</div>
+              <div class="fp-stock-row">
+                <span class="fp-stock-pill">🏢 Warehouse: <strong>{{ scannedProduct?.stock }}</strong></span>
+                <span class="fp-stock-pill fp-stock-r1">🚪 Room 1: <strong>{{ scannedProduct?.room1_stock || 0 }}</strong></span>
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Release From</label>
+              <div class="loc-toggle-row">
+                <div class="loc-toggle-opt" :class="{ active: scanDispenseLocation === 'warehouse' }" @click="scanDispenseLocation = 'warehouse'">
+                  🏢 Warehouse <span class="loc-stock">{{ scannedProduct?.stock }}</span>
+                </div>
+                <div class="loc-toggle-opt" :class="{ active: scanDispenseLocation === 'room1' }" @click="scanDispenseLocation = 'room1'">
+                  🚪 Room 1 <span class="loc-stock">{{ scannedProduct?.room1_stock || 0 }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Quantity <span class="req">*</span></label>
+              <div class="qty-row">
+                <button class="qty-btn" @click="scanDispenseQty = Math.max(1, scanDispenseQty - 1)">−</button>
+                <input class="form-input qty-input" type="number" v-model.number="scanDispenseQty" min="1" />
+                <button class="qty-btn" @click="scanDispenseQty++">+</button>
+                <span class="qty-unit">{{ scannedProduct?.unit || 'pcs' }}</span>
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Given To / Recipient <span class="req">*</span></label>
+              <input class="form-input" v-model="scanDispenseRecipient" placeholder="e.g. LGU Naic, Admin Juan" />
+            </div>
+            <div class="form-field">
+              <label class="form-label">Purpose <span class="req">*</span></label>
+              <textarea class="form-input" v-model="scanDispensePurpose" placeholder="e.g. CSR Activity — 5 tumblers as giveaways to LGU" rows="2"></textarea>
+            </div>
+            <div class="form-error" v-if="scanDispenseError">{{ scanDispenseError }}</div>
+            <div class="scanner-footer">
+              <button class="btn-cancel" @click="scanStep = 'choose-action'">← Back</button>
+              <button class="btn-save btn-green" @click="doDispenseFromScan" :disabled="saving">
+                <div class="spinner-sm" v-if="saving"></div>
+                <span v-else>Confirm Release</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 2: Add stock to warehouse -->
           <div class="scanner-body" v-if="scanStep === 'add-stock'">
             <div class="found-banner found-existing">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -877,7 +1010,7 @@ const dispenseLocation  = ref('warehouse')
 const dispenseQty       = ref(1)
 const dispenseRecipient = ref('')
 const dispensePurpose   = ref('')
-const dispenseErrors    = ref({ recipient: '', purpose: '', global: '' })
+const scanDispenseErrors    = ref({ recipient: '', purpose: '', global: '' })
 const dispensing        = ref(false)
 
 function openDispense(product) {
@@ -886,7 +1019,7 @@ function openDispense(product) {
   dispenseQty.value       = 1
   dispenseRecipient.value = ''
   dispensePurpose.value   = ''
-  dispenseErrors.value    = { recipient: '', purpose: '', global: '' }
+  scanDispenseErrors.value    = { recipient: '', purpose: '', global: '' }
   showDispense.value      = true
 }
 
@@ -896,11 +1029,11 @@ function closeDispense() {
 }
 
 async function doDispense() {
-  dispenseErrors.value = { recipient: '', purpose: '', global: '' }
+  scanDispenseErrors.value = { recipient: '', purpose: '', global: '' }
   let valid = true
-  if (!dispenseRecipient.value.trim()) { dispenseErrors.value.recipient = 'Recipient is required'; valid = false }
-  if (!dispensePurpose.value.trim())   { dispenseErrors.value.purpose   = 'Purpose is required'; valid = false }
-  if (dispenseQty.value < 1)           { dispenseErrors.value.global    = 'Quantity must be at least 1'; valid = false }
+  if (!dispenseRecipient.value.trim()) { scanDispenseErrors.value.recipient = 'Recipient is required'; valid = false }
+  if (!dispensePurpose.value.trim())   { scanDispenseErrors.value.purpose   = 'Purpose is required'; valid = false }
+  if (dispenseQty.value < 1)           { scanDispenseErrors.value.global    = 'Quantity must be at least 1'; valid = false }
   if (!valid) return
 
   dispensing.value = true
@@ -917,7 +1050,7 @@ async function doDispense() {
     showToast(`${dispenseQty.value} ${dispenseProduct.value.unit} of "${dispenseProduct.value.name}" released to ${dispenseRecipient.value}`, 'success')
     closeDispense()
   } catch (err) {
-    dispenseErrors.value.global = err.message
+    scanDispenseErrors.value.global = err.message
   } finally {
     dispensing.value = false
   }
@@ -985,6 +1118,14 @@ const scanStatus    = ref({ msg: '', type: '' })
 const scannedData   = ref({})          // parsed QR payload
 const scannedProduct = ref(null)       // matched existing product
 const stockQty      = ref(1)
+
+// Dispense / Room 1 via scanner
+const scanDispenseQty       = ref(1)
+const scanDispenseLocation  = ref('warehouse')
+const scanDispenseRecipient = ref('')
+const scanDispensePurpose   = ref('')
+const scanDispenseNotes     = ref('')
+const scanDispenseError     = ref('')
 const successMsg    = ref('')
 const newForm       = ref({})
 let html5QrScanner  = null
@@ -1239,9 +1380,15 @@ function processScannedSku(parsed) {
     p => p.sku?.toLowerCase() === parsed.sku?.toLowerCase()
   )
   if (match) {
-    scannedProduct.value = match
-    stockQty.value = 1
-    scanStep.value = 'add-stock'
+    scannedProduct.value  = match
+    stockQty.value        = 1
+    scanDispenseQty.value       = 1
+    scanDispenseLocation.value  = match.stock > 0 ? 'warehouse' : 'room1'
+    scanDispenseRecipient.value = ''
+    scanDispensePurpose.value   = ''
+    scanDispenseNotes.value     = ''
+    scanDispenseError.value     = ''
+    scanStep.value = 'choose-action'
   } else {
     // Pre-fill new product form with scanned data
     newForm.value = {
@@ -1254,6 +1401,50 @@ function processScannedSku(parsed) {
       reorder_at: 10,
     }
     scanStep.value = 'new-product'
+  }
+}
+
+async function doRoom1Transfer() {
+  scanDispenseError.value = ''
+  if (scanDispenseQty.value < 1) { scanDispenseError.value = 'Quantity must be at least 1'; return }
+  if (scanDispenseQty.value > scannedProduct.value.stock) {
+    scanDispenseError.value = `Only ${scannedProduct.value.stock} available in warehouse`; return
+  }
+  saving.value = true
+  try {
+    const userName = currentProfile.value?.name || 'Unknown'
+    await transferToRoom1(scannedProduct.value, scanDispenseQty.value, scanDispenseNotes.value, userName)
+    successMsg.value = `Moved ${scanDispenseQty.value} ${scannedProduct.value.unit || 'pcs'} of "${scannedProduct.value.name}" to Room 1`
+    scanStep.value = 'success'
+  } catch (err) {
+    scanDispenseError.value = err.message
+  } finally {
+    saving.value = false
+  }
+}
+
+async function doDispenseFromScan() {
+  scanDispenseError.value = ''
+  if (!scanDispenseRecipient.value.trim()) { scanDispenseError.value = 'Recipient is required'; return }
+  if (!scanDispensePurpose.value.trim())   { scanDispenseError.value = 'Purpose is required'; return }
+  if (scanDispenseQty.value < 1)           { scanDispenseError.value = 'Quantity must be at least 1'; return }
+  saving.value = true
+  try {
+    const userName = currentProfile.value?.name || 'Unknown'
+    await dispenseStock(
+      scannedProduct.value,
+      scanDispenseQty.value,
+      scanDispenseLocation.value,
+      scanDispenseRecipient.value.trim(),
+      scanDispensePurpose.value.trim(),
+      userName
+    )
+    successMsg.value = `Released ${scanDispenseQty.value} ${scannedProduct.value.unit || 'pcs'} of "${scannedProduct.value.name}" to ${scanDispenseRecipient.value}`
+    scanStep.value = 'success'
+  } catch (err) {
+    scanDispenseError.value = err.message
+  } finally {
+    saving.value = false
   }
 }
 
@@ -1707,6 +1898,32 @@ function showToast(message, type = 'success') {
 .found-new      { background: #EFF6FF; color: #2563EB; border: 1px solid #BFDBFE; }
 
 .found-product { background: #F7F3F4; border: 1.5px solid #EDE3E5; border-radius: 12px; padding: 14px 16px; }
+.fp-stock-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.fp-stock-pill { font-size: 12px; color: #555; background: white; padding: 3px 10px; border-radius: 20px; border: 1.5px solid #EDE3E5; }
+.fp-stock-r1 { border-color: #B01020; color: #B01020; }
+.action-chooser-list { display: flex; flex-direction: column; gap: 10px; }
+.action-choice-btn { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1.5px solid #EDE3E5; border-radius: 14px; background: white; cursor: pointer; text-align: left; transition: all 0.15s; width: 100%; }
+.action-choice-btn:hover { border-color: #B01020; background: #FFF5F6; }
+.acb-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.acb-red  { background: #FFF5F6; color: #B01020; }
+.acb-blue { background: #EFF6FF; color: #2563EB; }
+.acb-green { background: #ECFDF5; color: #059669; }
+.acb-text { flex: 1; min-width: 0; }
+.acb-title { font-size: 14px; font-weight: 700; color: #1A1016; }
+.acb-sub { font-size: 12px; color: #9A8589; margin-top: 2px; }
+.btn-cancel-scan-inv { background: none; border: none; color: #9A8589; font-size: 13px; cursor: pointer; padding: 8px 0; text-align: left; }
+.btn-cancel-scan-inv:hover { color: #B01020; }
+.loc-toggle-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.loc-toggle-opt { padding: 10px 14px; border: 2px solid #EDE3E5; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; color: #555; display: flex; justify-content: space-between; align-items: center; transition: all 0.15s; }
+.loc-toggle-opt:hover { border-color: #B01020; }
+.loc-toggle-opt.active { border-color: #B01020; background: #FFF5F6; color: #B01020; }
+.loc-stock { font-size: 11px; font-weight: 500; background: white; padding: 2px 7px; border-radius: 20px; }
+.btn-blue  { background: #2563EB !important; }
+.btn-blue:hover:not(:disabled) { background: #1D4ED8 !important; }
+.btn-green { background: #059669 !important; }
+.btn-green:hover:not(:disabled) { background: #047857 !important; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin-icon { animation: spin 0.8s linear infinite; }
 .fp-name { font-size: 15px; font-weight: 700; color: #1A1016; margin-bottom: 4px; }
 .fp-meta { display: flex; gap: 8px; margin-bottom: 6px; }
 .fp-sku  { font-family: monospace; font-size: 11px; font-weight: 700; color: #B01020; }
